@@ -1,0 +1,8 @@
+# IDE/build process related
+.idea/
+.gradle/
+
+# Build output
+build/
+classes/
+out/
