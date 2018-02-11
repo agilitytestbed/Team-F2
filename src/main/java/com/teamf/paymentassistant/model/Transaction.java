@@ -27,25 +27,25 @@ package com.teamf.paymentassistant.model;
 public class Transaction {
 
     private long id;
-    private double amount;
+    private long amount;
     private Category category;
 
     /**
      * Constructor to create a transaction without a category.
      * @param id transaction id
-     * @param amount transaction amount
+     * @param amount transaction amount in cents
      */
-    Transaction(long id, double amount) {
+    public Transaction(long id, long amount) {
         this(id, amount, null);
     }
 
     /**
      * Constructor to create a transaction with a category.
      * @param id transaction id
-     * @param amount transaction amount
+     * @param amount transaction amount in cents
      * @param category transaction category
      */
-    Transaction(long id, double amount, Category category) {
+    public Transaction(long id, long amount, Category category) {
         this.id = id;
         this.amount = amount;
         this.category = category;
@@ -55,7 +55,7 @@ public class Transaction {
         return id;
     }
 
-    public double getAmount() {
+    public long getAmount() {
         return amount;
     }
 
