@@ -22,48 +22,26 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.model;
+package com.teamf.paymentassistant;
 
-public class Transaction {
+import com.teamf.paymentassistant.api.DPAService;
+import io.advantageous.qbit.admin.ManagedServiceBuilder;
 
-    private long id;
-    private double amount;
-    private Category category;
+import static io.advantageous.qbit.admin.ManagedServiceBuilder.managedServiceBuilder;
 
-    /**
-     * Constructor to create a transaction without a category.
-     * @param id transaction id
-     * @param amount transaction amount
-     */
-    Transaction(long id, double amount) {
-        this(id, amount, null);
-    }
+public class DPAMain {
 
     /**
-     * Constructor to create a transaction with a category.
-     * @param id transaction id
-     * @param amount transaction amount
-     * @param category transaction category
+     * Main method to start the server with the appropriate service.
+     * @param args
      */
-    Transaction(long id, double amount, Category category) {
-        this.id = id;
-        this.amount = amount;
-        this.category = category;
+    public static void main(String... args) {
+        final ManagedServiceBuilder managedServiceBuilder = managedServiceBuilder().setRootURI("");
+
+        managedServiceBuilder.addEndpointService(new DPAService()).getEndpointServerBuilder().build().startServer();
+
+        /* Start the admin builder which exposes health end-points and meta data. */
+        managedServiceBuilder.getAdminBuilder().build().startServer();
     }
 
-    public long getId() {
-        return id;
-    }
-
-    public double getAmount() {
-        return amount;
-    }
-
-    public Category getCategory() {
-        return category;
-    }
-
-    public void setCategory(Category category) {
-        this.category = category;
-    }
 }

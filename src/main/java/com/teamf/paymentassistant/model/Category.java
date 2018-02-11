@@ -24,5 +24,7 @@
  */
 package com.teamf.paymentassistant.model;
 
-public class Category {
+public enum Category {
+    GROCERIES, INSURANCE, TRAVEL, SHOPPING, GENGERAL, UTILITIES, RESTAURANTS, HEALTH, ENTERTAINMENT, TRANSPORT,
+    SERVICES, TRANSFERS
 }
