@@ -28,7 +28,9 @@ import io.advantageous.qbit.admin.ManagedServiceBuilder;
 import io.advantageous.qbit.reactive.Reactor;
 import io.advantageous.qbit.reactive.ReactorBuilder;
 import io.advantageous.qbit.service.ServiceQueue;
+import nl.utwente.ing.api.AuthorizationService;
 import nl.utwente.ing.api.DPAService;
+import nl.utwente.ing.api.SessionAuthService;
 import nl.utwente.ing.controller.Storage;
 import nl.utwente.ing.controller.StorageAsync;
 
@@ -48,15 +50,17 @@ public class DPAMain {
         final Reactor reactor = ReactorBuilder.reactorBuilder().setDefaultTimeOut(1).setTimeUnit(TimeUnit.SECONDS)
                 .build();
 
-        final ServiceQueue transactionStorageService = managedServiceBuilder
+        final ServiceQueue storageService = managedServiceBuilder
                 .createServiceBuilderForServiceObject(new Storage()).build();
 
-        transactionStorageService.startServiceQueue().startCallBackHandler();
+        storageService.startServiceQueue().startCallBackHandler();
 
-        final StorageAsync storageAsync = transactionStorageService
+        final StorageAsync storageAsync = storageService
                 .createProxy(StorageAsync.class);
 
-        managedServiceBuilder.addEndpointService(new DPAService(reactor, storageAsync))
+        final AuthorizationService authService = new SessionAuthService();
+
+        managedServiceBuilder.addEndpointService(new DPAService(reactor, storageAsync, authService))
                 .getEndpointServerBuilder().build().startServer();
 
         managedServiceBuilder.getAdminBuilder().build().startServer();

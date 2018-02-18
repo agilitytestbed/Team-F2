@@ -43,16 +43,20 @@ public class DPAService {
 
     private final Reactor reactor;
     private final StorageAsync storageAsync;
+    private final AuthorizationService authService;
 
     /**
      * Constructor for a new Digital Payment Assistant REST service.
      * @param reactor reactor
      * @param storageAsync async interface to the TransactionStorage
      */
-    public DPAService(final Reactor reactor, final StorageAsync storageAsync) {
+    public DPAService(final Reactor reactor, final StorageAsync storageAsync, final AuthorizationService authService) {
         this.reactor = reactor;
         this.reactor.addServiceToFlush(storageAsync);
+        this.reactor.addServiceToFlush(authService);
         this.storageAsync = storageAsync;
+        this.authService = authService;
+
     }
 
 

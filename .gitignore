@@ -1,8 +1,10 @@
 # IDE/build process related
 .idea/
 .gradle/
+*.iml
 
 # Build output
 build/
 classes/
 out/
+
