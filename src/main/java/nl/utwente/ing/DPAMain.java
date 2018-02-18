@@ -22,12 +22,17 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant;
+package nl.utwente.ing;
 
-import com.teamf.paymentassistant.api.DPAService;
 import io.advantageous.qbit.admin.ManagedServiceBuilder;
+import io.advantageous.qbit.reactive.Reactor;
+import io.advantageous.qbit.reactive.ReactorBuilder;
+import io.advantageous.qbit.service.ServiceQueue;
+import nl.utwente.ing.api.DPAService;
+import nl.utwente.ing.controller.Storage;
+import nl.utwente.ing.controller.StorageAsync;
 
-import static io.advantageous.qbit.admin.ManagedServiceBuilder.managedServiceBuilder;
+import java.util.concurrent.TimeUnit;
 
 public class DPAMain {
 
@@ -36,11 +41,24 @@ public class DPAMain {
      * @param args
      */
     public static void main(String... args) {
-        final ManagedServiceBuilder managedServiceBuilder = managedServiceBuilder().setRootURI("");
 
-        managedServiceBuilder.addEndpointService(new DPAService()).getEndpointServerBuilder().build().startServer();
+        final ManagedServiceBuilder managedServiceBuilder = ManagedServiceBuilder.managedServiceBuilder()
+                .setRootURI("/api/v1").setPort(8080);
 
-        /* Start the admin builder which exposes health end-points and meta data. */
+        final Reactor reactor = ReactorBuilder.reactorBuilder().setDefaultTimeOut(1).setTimeUnit(TimeUnit.SECONDS)
+                .build();
+
+        final ServiceQueue transactionStorageService = managedServiceBuilder
+                .createServiceBuilderForServiceObject(new Storage()).build();
+
+        transactionStorageService.startServiceQueue().startCallBackHandler();
+
+        final StorageAsync storageAsync = transactionStorageService
+                .createProxy(StorageAsync.class);
+
+        managedServiceBuilder.addEndpointService(new DPAService(reactor, storageAsync))
+                .getEndpointServerBuilder().build().startServer();
+
         managedServiceBuilder.getAdminBuilder().build().startServer();
     }
 

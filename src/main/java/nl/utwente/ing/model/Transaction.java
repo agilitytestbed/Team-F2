@@ -22,45 +22,66 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.model;
+package nl.utwente.ing.model;
 
 public class Transaction {
 
-    private long id;
+    private int id;
+    private String date;
     private long amount;
+    private String externalIBAN;
     private Category category;
+    private Type type;
 
     /**
      * Constructor to create a transaction without a category.
      * @param id transaction id
      * @param amount transaction amount in cents
      */
-    public Transaction(long id, long amount) {
-        this(id, amount, null);
+    public Transaction(int id, String date, long amount, String externalIBAN, Type type) {
+        this(id, date, amount, externalIBAN, type,null);
     }
 
     /**
      * Constructor to create a transaction with a category.
      * @param id transaction id
      * @param amount transaction amount in cents
+     * @param externalIBAN IBAN number of the sender/receiver
+     * @param type type of transaction
      * @param category transaction category
      */
-    public Transaction(long id, long amount, Category category) {
+    public Transaction(int id, String date, long amount, String externalIBAN, Type type, Category category) {
         this.id = id;
+        this.date = date;
         this.amount = amount;
+        this.externalIBAN = externalIBAN;
+        this.type = type;
         this.category = category;
+
     }
 
-    public long getId() {
+    public int getId() {
         return id;
+    }
+
+    public String getDate() {
+        return date;
     }
 
     public long getAmount() {
         return amount;
     }
 
+    public String getExternalIBAN() {
+        return externalIBAN;
+    }
+
     public Category getCategory() {
         return category;
+    }
+
+    public Type getType() {
+        return type;
     }
 
     public void setCategory(Category category) {

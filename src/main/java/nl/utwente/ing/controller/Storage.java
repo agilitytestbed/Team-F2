@@ -22,7 +22,51 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.controller;
+package nl.utwente.ing.controller;
 
-public class TransactionStorageAsync {
+import nl.utwente.ing.model.Category;
+import nl.utwente.ing.model.Transaction;
+
+public class Storage {
+
+    /**
+     * Adds a transaction to the database.
+     * @param transaction to be added
+     * @return true if successful
+     */
+    public boolean addTransaction(final Transaction transaction) {
+        //TODO: add this transaction to the database
+        return true;
+    }
+
+    /**
+     * Removes a transaction from the database.
+     * @param transaction to be deleted
+     * @return true if successful
+     */
+    public boolean deleteTransaction(final Transaction transaction) {
+        //TODO: delete this category from the database
+        return true;
+    }
+
+    /**
+     * Adds a category to the database.
+     * @param category to be added
+     * @return true if successful
+     */
+    public boolean addCategory(final Category category) {
+        //TODO: add this category to the database
+        return true;
+    }
+
+    /**
+     * Deletes a category from the database.
+     * @param category to be deleted
+     * @return true if succesful
+     */
+    public boolean deleteCategory(final Category category) {
+        //TODO: delete this category from the database
+        return true;
+    }
+
 }

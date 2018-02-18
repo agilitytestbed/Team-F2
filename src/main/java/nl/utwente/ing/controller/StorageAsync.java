@@ -22,7 +22,25 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.controller;
+package nl.utwente.ing.controller;
 
-public class TransactionStorage {
+import io.advantageous.qbit.reactive.Callback;
+import nl.utwente.ing.model.Transaction;
+
+import java.util.List;
+
+public interface StorageAsync {
+
+    void getAllTransacions(final Callback<List<Transaction>> transactionListCallback, String userIBAN);
+
+    void getTransaction(final Callback<Transaction> getTransactionCallback, String userIBAN);
+
+    void createTransaction(final Callback<Boolean> createTransactionCallback, String userIBAN);
+
+    void updateTransaction(final Callback<Boolean> updateTransactionCallback, String userIBAN);
+
+    void deleteTransaction(final Callback<Boolean> deleteTransactionCallback, String userIBAN);
+
+    void assignCattegoryToTransaction(final Callback<Boolean> assignCategoryCallback, String userIBAN);
+
 }

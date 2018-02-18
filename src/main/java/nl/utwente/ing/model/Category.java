@@ -22,40 +22,24 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.database;
+package nl.utwente.ing.model;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+public class Category {
 
-public class DBConnection {
+    private int id;
+    private String name;
 
-	/**
-	 * SQL Connection to the database.
-	 */
-	private Connection connection;
+    public Category(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
 
-	/**
-	 * Creates a new connection to the local SQLite database.
-	 * Requires the SQLite database to exist.
-	 */
-	public DBConnection() {
-		try {
-			Class.forName("org.sqlite.JDBC");
-			String path = "jdbc:sqlite:" + this.getClass().getClassLoader().getResource("transactions.sqlite").getPath();
-			this.connection = DriverManager.getConnection(path);
-		} catch (ClassNotFoundException | SQLException e) {
-			e.printStackTrace();
-		}
-	}
+    public int getId() {
+        return id;
+    }
 
-	/**
-	 * Returns an initialized connection to the SQLite database.
-	 *
-	 * @return connection to the SQLite database
-	 */
-	public Connection getConnection() {
-		return connection;
-	}
+    public String getName() {
+        return name;
+    }
 
 }

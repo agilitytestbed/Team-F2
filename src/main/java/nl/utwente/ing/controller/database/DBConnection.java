@@ -22,7 +22,40 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.controller;
+package nl.utwente.ing.controller.database;
 
-public class Reactor {
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+public class DBConnection {
+
+    /**
+     * SQL Connection to the database.
+     */
+    private Connection connection;
+
+    /**
+     * Creates a new connection to the local SQLite database.
+     * Requires the SQLite database to exist.
+     */
+    public DBConnection() {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            String path = "jdbc:sqlite:" + this.getClass().getClassLoader().getResource("transactions.sqlite").getPath();
+            this.connection = DriverManager.getConnection(path);
+        } catch (ClassNotFoundException | SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Returns an initialized connection to the SQLite database.
+     *
+     * @return connection to the SQLite database
+     */
+    public Connection getConnection() {
+        return connection;
+    }
+
 }
