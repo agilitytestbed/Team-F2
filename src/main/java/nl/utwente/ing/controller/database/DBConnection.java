@@ -24,27 +24,43 @@
  */
 package nl.utwente.ing.controller.database;
 
+import com.mchange.v2.c3p0.ComboPooledDataSource;
+
+import java.beans.PropertyVetoException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Objects;
 
 public class DBConnection {
 
     /**
-     * SQL Connection to the database.
+     * SQL Connection pool to the database.
      */
-    private Connection connection;
+    private static ComboPooledDataSource databasePool;
 
     /**
-     * Creates a new connection to the local SQLite database.
+     * Creates a new connection pool to the local SQLite database.
      * Requires the SQLite database to exist.
      */
     public DBConnection() {
+        if (databasePool == null) {
+            initializePool();
+        }
+    }
+
+    private void initializePool() {
         try {
-            Class.forName("org.sqlite.JDBC");
-            String path = "jdbc:sqlite:" + this.getClass().getClassLoader().getResource("transactions.sqlite").getPath();
-            this.connection = DriverManager.getConnection(path);
-        } catch (ClassNotFoundException | SQLException e) {
+            databasePool = new ComboPooledDataSource();
+            databasePool.setDriverClass( "org.sqlite.JDBC" ); //loads the jdbc driver
+            String path = "jdbc:sqlite:" + Objects.requireNonNull(this.getClass().getClassLoader().
+                    getResource("transactions.sqlite")).getPath();
+            databasePool.setJdbcUrl(path);
+
+            databasePool.setMinPoolSize(5);
+            databasePool.setAcquireIncrement(5);
+            databasePool.setMaxPoolSize(20);
+
+        } catch (PropertyVetoException e) {
             e.printStackTrace();
         }
     }
@@ -54,8 +70,14 @@ public class DBConnection {
      *
      * @return connection to the SQLite database
      */
-    public Connection getConnection() {
-        return connection;
+    public Connection getConnection() throws SQLException {
+        return databasePool.getConnection();
     }
 
+    public static void main(String[] args) throws SQLException {
+        DBConnection dbConnection = new DBConnection();
+        Connection connection = dbConnection.getConnection();
+        connection.prepareStatement("SELECT * FROM categories").execute();
+        connection.close();
+    }
 }
