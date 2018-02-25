@@ -22,16 +22,22 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nl.utwente.ing;
+package nl.utwente.ing.controller;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import nl.utwente.ing.model.Session;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootApplication
-public class DPAService {
+import java.util.Date;
 
-	public static void main(String[] args) {
-		SpringApplication.run(DPAService.class, args);
-	}
+@RestController
+@RequestMapping("/api/v1/sessions")
+public class SessionController {
+
+    @RequestMapping(value = "", method = RequestMethod.GET)
+    public Session getSession() {
+        return new Session("", new Date());
+    }
 
 }

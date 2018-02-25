@@ -73,11 +73,4 @@ public class DBConnection {
     public Connection getConnection() throws SQLException {
         return databasePool.getConnection();
     }
-
-    public static void main(String[] args) throws SQLException {
-        DBConnection dbConnection = new DBConnection();
-        Connection connection = dbConnection.getConnection();
-        connection.prepareStatement("SELECT * FROM categories").execute();
-        connection.close();
-    }
 }

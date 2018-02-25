@@ -22,16 +22,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package nl.utwente.ing;
+package nl.utwente.ing.controller;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootApplication
-public class DPAService {
+@RestController
+@RequestMapping("/api/v1/categories")
+public class CategoryController {
 
-	public static void main(String[] args) {
-		SpringApplication.run(DPAService.class, args);
-	}
 
 }
