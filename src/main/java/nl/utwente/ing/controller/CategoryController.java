@@ -24,12 +24,56 @@
  */
 package nl.utwente.ing.controller;
 
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import nl.utwente.ing.controller.database.DBConnection;
+import nl.utwente.ing.model.Category;
+import org.springframework.web.bind.annotation.*;
+
+import javax.servlet.http.HttpServletResponse;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/categories")
 public class CategoryController {
 
+    @RequestMapping(value = "", method = RequestMethod.GET)
+    public List<Category> getCategories(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
+                                        @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                        @RequestParam(value = "offset", required = false) Integer offset,
+                                        @RequestParam(value = "limit", required = false) Integer limit,
+                                        @RequestParam(value = "category", required = false) String category,
+                                        HttpServletResponse response) {
+        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        if (sessionID == null) {
+            response.setStatus(401);
+            return null;
+        }
+
+        try (Connection connection = DBConnection.instance.getConnection()){
+            String query = "SELECT c.category_id, c.name FROM session_categories s, categories c WHERE s.session_id = ? AND s.category_id = c.category_id;";
+            PreparedStatement preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, sessionID);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            // TODO: Take offset, limit and category parameters into consideration.
+            List<Category> results = new ArrayList<>();
+            while (resultSet.next()) {
+                int id = resultSet.getInt(1);
+                String name = resultSet.getString(2);
+                results.add(new Category(id, name));
+            }
+
+            preparedStatement.close();
+            return results;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return null;
+        }
+    }
 
 }

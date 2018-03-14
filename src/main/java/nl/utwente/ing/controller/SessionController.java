@@ -24,20 +24,52 @@
  */
 package nl.utwente.ing.controller;
 
-import nl.utwente.ing.model.Session;
+import nl.utwente.ing.controller.database.DBConnection;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Date;
+import javax.servlet.http.HttpServletResponse;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Random;
 
 @RestController
 @RequestMapping("/api/v1/sessions")
 public class SessionController {
 
+    private Random random = new Random();
+
     @RequestMapping(value = "", method = RequestMethod.GET)
-    public Session getSession() {
-        return new Session("", new Date());
+    public Integer getSession(HttpServletResponse response) {
+        try {
+            int sessionId = random.nextInt();
+            while (checkSessionExists(sessionId)) {
+                sessionId = random.nextInt();
+            }
+
+            Connection connection = DBConnection.instance.getConnection();
+            String query = "INSERT INTO sessions (session_id, creation_time) VALUES (?, ?);";
+            PreparedStatement preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, sessionId);
+            preparedStatement.setLong(2, System.currentTimeMillis());
+            preparedStatement.executeUpdate();
+            preparedStatement.close();
+
+            return sessionId;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return null;
+        }
     }
 
+    private static boolean checkSessionExists(int sessionId) throws SQLException {
+        Connection connection = DBConnection.instance.getConnection();
+        String query = "SELECT * FROM sessions WHERE session_id = " + sessionId;
+        ResultSet result = connection.createStatement().executeQuery(query);
+        return result.next();
+    }
 }

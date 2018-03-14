@@ -37,6 +37,12 @@ public class DBConnection {
      * SQL Connection pool to the database.
      */
     private static ComboPooledDataSource databasePool;
+    public static DBConnection instance = new DBConnection();
+
+    /**
+     * The name of the SQLite database in the project resources
+     */
+    private static final String DATABASE_NAME = "database.sqlite";
 
     /**
      * Creates a new connection pool to the local SQLite database.
@@ -53,7 +59,7 @@ public class DBConnection {
             databasePool = new ComboPooledDataSource();
             databasePool.setDriverClass( "org.sqlite.JDBC" ); //loads the jdbc driver
             String path = "jdbc:sqlite:" + Objects.requireNonNull(this.getClass().getClassLoader().
-                    getResource("transactions.sqlite")).getPath();
+                    getResource(DATABASE_NAME)).getPath();
             databasePool.setJdbcUrl(path);
 
             databasePool.setMinPoolSize(5);
