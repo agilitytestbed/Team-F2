@@ -51,10 +51,9 @@ public class SessionController {
             }
 
             Connection connection = DBConnection.instance.getConnection();
-            String query = "INSERT INTO sessions (session_id, creation_time) VALUES (?, ?);";
+            String query = "INSERT INTO sessions (session_id) VALUES (?);";
             PreparedStatement preparedStatement = connection.prepareStatement(query);
             preparedStatement.setInt(1, sessionId);
-            preparedStatement.setLong(2, System.currentTimeMillis());
             preparedStatement.executeUpdate();
             preparedStatement.close();
 
