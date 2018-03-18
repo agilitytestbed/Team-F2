@@ -26,9 +26,9 @@ package nl.utwente.ing.model;
 
 public class Transaction {
 
-    private int id;
+    private Integer id;
     private String date;
-    private long amount;
+    private Long amount;
     private String externalIBAN;
     private Category category;
     private Type type;
@@ -38,7 +38,7 @@ public class Transaction {
      * @param id transaction id
      * @param amount transaction amount in cents
      */
-    public Transaction(int id, String date, long amount, String externalIBAN, Type type) {
+    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type) {
         this(id, date, amount, externalIBAN, type,null);
     }
 
@@ -50,7 +50,7 @@ public class Transaction {
      * @param type type of transaction
      * @param category transaction category
      */
-    public Transaction(int id, String date, long amount, String externalIBAN, Type type, Category category) {
+    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type, Category category) {
         this.id = id;
         this.date = date;
         this.amount = amount;
@@ -60,7 +60,7 @@ public class Transaction {
 
     }
 
-    public int getId() {
+    public Integer getId() {
         return id;
     }
 
@@ -68,7 +68,7 @@ public class Transaction {
         return date;
     }
 
-    public long getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
