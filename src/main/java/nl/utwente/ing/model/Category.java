@@ -26,15 +26,19 @@ package nl.utwente.ing.model;
 
 public class Category {
 
-    private int id;
+    private Integer id;
     private String name;
 
-    public Category(int id, String name) {
+    public Category(Integer id, String name) {
         this.id = id;
         this.name = name;
     }
 
-    public int getId() {
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public Integer getId() {
         return id;
     }
 
