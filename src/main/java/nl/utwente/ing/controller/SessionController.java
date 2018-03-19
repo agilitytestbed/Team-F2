@@ -65,10 +65,12 @@ public class SessionController {
         }
     }
 
-    private static boolean checkSessionExists(int sessionId) throws SQLException {
+    public static boolean checkSessionExists(Integer sessionId) throws SQLException {
         Connection connection = DBConnection.instance.getConnection();
         String query = "SELECT * FROM sessions WHERE session_id = " + sessionId;
         ResultSet result = connection.createStatement().executeQuery(query);
-        return result.next();
+        boolean exists = result.next();
+        connection.close();
+        return exists;
     }
 }
