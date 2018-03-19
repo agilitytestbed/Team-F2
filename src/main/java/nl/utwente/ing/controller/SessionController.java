@@ -42,8 +42,8 @@ public class SessionController {
 
     private Random random = new Random();
 
-    @RequestMapping(value = "", method = RequestMethod.GET)
-    public Integer getSession(HttpServletResponse response) {
+    @RequestMapping(value = "", method = RequestMethod.POST)
+    public String getSession(HttpServletResponse response) {
         try {
             int sessionId = random.nextInt();
             while (checkSessionExists(sessionId)) {
@@ -57,7 +57,7 @@ public class SessionController {
             preparedStatement.executeUpdate();
             preparedStatement.close();
 
-            return sessionId;
+            return String.format("{\"session_id\": %d}", sessionId);
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
