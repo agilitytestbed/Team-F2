@@ -25,5 +25,6 @@
 package nl.utwente.ing.model;
 
 public enum Type {
-    DEPOSIT, WITHDRAWAL
+    deposit,
+    withdrawal
 }

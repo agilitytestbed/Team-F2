@@ -27,6 +27,7 @@ package nl.utwente.ing.controller.database;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 import java.beans.PropertyVetoException;
+import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -58,8 +59,9 @@ public class DBConnection {
         try {
             databasePool = new ComboPooledDataSource();
             databasePool.setDriverClass( "org.sqlite.JDBC" ); //loads the jdbc driver
+
             String path = "jdbc:sqlite:" + Objects.requireNonNull(this.getClass().getClassLoader().
-                    getResource(DATABASE_NAME)).getPath();
+                    getResource(DATABASE_NAME)).getPath().replace("/", System.getProperty("file.separator")).replace("%20", " ");
             databasePool.setJdbcUrl(path);
 
             databasePool.setMinPoolSize(5);

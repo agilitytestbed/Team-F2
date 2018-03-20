@@ -24,8 +24,7 @@
  */
 package nl.utwente.ing.controller;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.*;
 import nl.utwente.ing.controller.database.DBConnection;
 import nl.utwente.ing.model.Category;
 import nl.utwente.ing.model.Transaction;
@@ -131,7 +130,14 @@ public class TransactionController {
         }
 
         try {
-            Gson gson = new Gson();
+            JsonParser parser = new JsonParser();
+            String amount = parser.parse(body).getAsJsonObject().get("amount").getAsString().replace(",", "");
+            System.out.println("amount = " + amount);
+
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionDeserializer());
+            Gson gson = gsonBuilder.create();
+
             Transaction transaction = gson.fromJson(body, Transaction.class);
 
             if (transaction.getDate() == null || transaction.getAmount() == null || transaction.getExternalIBAN() ==
@@ -141,26 +147,60 @@ public class TransactionController {
 
             String query = "INSERT INTO transactions (date, amount, external_iban, category_id, type, session_id) VALUES " +
                     "(?, ?, ?, ?, ?, ?);";
+            String resultQuery = "SELECT last_insert_rowid() FROM transactions LIMIT 1;";
 
             try (Connection connection = DBConnection.instance.getConnection();
+                 PreparedStatement resultStatement = connection.prepareStatement(resultQuery);
                  PreparedStatement statement = connection.prepareStatement(query)
             ) {
                 statement.setString(1, transaction.getDate());
-                statement.setLong(2, transaction.getAmount());
+                statement.setDouble(2, transaction.getAmount());
                 statement.setString(3, transaction.getExternalIBAN());
-                statement.setInt(4, transaction.getCategory().getId());
-                statement.setString(5, transaction.getType().toString());
-                statement.setInt(6, sessionID);
-                statement.executeUpdate();
+                if (transaction.getCategory() != null) {
+                    statement.setInt(4, transaction.getCategory().getId());
+                }
 
-                response.setStatus(201);
-                return transaction;
+                statement.setString(5, transaction.getType().toString().toLowerCase());
+                statement.setInt(6, sessionID);
+
+                if (statement.executeUpdate() != 1) {
+                    response.setStatus(405);
+                    return null;
+                }
+
+                ResultSet result = resultStatement.executeQuery();
+
+                if (result.next()) {
+                    transaction.setId(result.getInt(1));
+
+                    resultQuery = "SELECT transaction_id, date, amount, external_iban, type, category_id, session_id FROM transactions WHERE transaction_id = ?";
+
+                    PreparedStatement transactionStatement = connection.prepareStatement(resultQuery);
+                    transactionStatement.setInt(1, result.getInt(1));
+
+                    ResultSet transactionSet = transactionStatement.executeQuery();
+
+                    if (transactionSet.next()) {
+
+                        response.setStatus(201);
+                        return new Transaction(transactionSet.getInt(1),
+                                transactionSet.getString(2),
+                                transactionSet.getLong(3),
+                                transactionSet.getString(4),
+                                Type.valueOf(transactionSet.getString(5))
+                                );
+                    }
+                }
+                response.setStatus(405);
+                return null;
+
             } catch (SQLException e) {
                 e.printStackTrace();
                 response.setStatus(500);
                 return null;
             }
         } catch (JsonSyntaxException e) {
+            e.printStackTrace();
             response.setStatus(405);
             return null;
         }
@@ -201,5 +241,27 @@ public class TransactionController {
     @RequestMapping(value = "/{transactionId}/category", method = RequestMethod.PATCH)
     public void assignCategoryToTransaction(HttpServletResponse response) {
         response.setStatus(200);
+    }
+}
+
+class TransactionDeserializer implements JsonDeserializer<Transaction> {
+
+    @Override
+    public Transaction deserialize(JsonElement json, java.lang.reflect.Type type, JsonDeserializationContext
+            jsonDeserializationContext) throws JsonParseException {
+        JsonObject jsonObject = json.getAsJsonObject();
+
+        String date = jsonObject.get("date").getAsString();
+        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(",", ""));
+        String externalIBAN = jsonObject.get("externalIBAN").getAsString();
+        Type transactionType = Type.valueOf(jsonObject.get("type").getAsString());
+        Category category = null;
+
+        if (json.getAsJsonObject().has("category")) {
+            category = new Category(jsonObject.get("category").getAsJsonObject().get("id").getAsInt(),
+                    jsonObject.get("category").getAsJsonObject().get("name").getAsString());
+        }
+
+        return new Transaction(null, date, amount, externalIBAN, transactionType, category);
     }
 }

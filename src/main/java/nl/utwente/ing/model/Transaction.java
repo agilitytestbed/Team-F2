@@ -84,6 +84,26 @@ public class Transaction {
         return type;
     }
 
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public void setDate(String date) {
+        this.date = date;
+    }
+
+    public void setAmount(Long amount) {
+        this.amount = amount;
+    }
+
+    public void setExternalIBAN(String externalIBAN) {
+        this.externalIBAN = externalIBAN;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
     public void setCategory(Category category) {
         this.category = category;
     }
