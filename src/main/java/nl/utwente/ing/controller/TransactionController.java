@@ -58,7 +58,7 @@ public class TransactionController {
                                                 @RequestParam(value = "category", required = false) String category,
                                                 HttpServletResponse response) {
 
-        String transactionsQuery = "SELECT t.transaction_id, t.amount, t.date, t.external_iban, t.type, c.category_id, c.name\n" +
+        String transactionsQuery = "SELECT t.transaction_id, t.date, t.amount, t.external_iban, t.type, c.category_id, c.name\n" +
                 "FROM transactions t, categories c\n" +
                 "WHERE c.category_id = t.category_id AND\n" +
                 "      t.session_id = ? AND\n" +
@@ -66,8 +66,7 @@ public class TransactionController {
 
         Integer sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
 
-        if (sessionID == null) {
-            response.setStatus(401);
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 
@@ -127,8 +126,7 @@ public class TransactionController {
                                          HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
 
-        if (sessionID == null) {
-            response.setStatus(401);
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 

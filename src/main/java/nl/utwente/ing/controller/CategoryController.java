@@ -45,7 +45,7 @@ public class CategoryController {
                                         HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (isInvalidSession(response, sessionID)) {
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 
@@ -78,7 +78,7 @@ public class CategoryController {
                                 HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (isInvalidSession(response, sessionID)) {
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 
@@ -132,7 +132,7 @@ public class CategoryController {
                                HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (isInvalidSession(response, sessionID)) {
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 
@@ -166,7 +166,7 @@ public class CategoryController {
                                 HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (isInvalidSession(response, sessionID)) {
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
         }
 
@@ -213,7 +213,7 @@ public class CategoryController {
                                HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (isInvalidSession(response, sessionID)) {
+        if (SessionController.isInvalidSession(response, sessionID)) {
             return;
         }
 
@@ -232,26 +232,6 @@ public class CategoryController {
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
-        }
-    }
-
-    private boolean isInvalidSession(HttpServletResponse response, Integer sessionID) {
-        if (sessionID == null) {
-            response.setStatus(401);
-            return true;
-        }
-
-        try {
-            if (SessionController.checkSessionExists(sessionID)) {
-                return false;
-            } else {
-                response.setStatus(401);
-                return true;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            response.setStatus(500);
-            return true;
         }
     }
 }

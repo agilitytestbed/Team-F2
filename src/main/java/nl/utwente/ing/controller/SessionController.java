@@ -65,6 +65,26 @@ public class SessionController {
         }
     }
 
+    public static boolean isInvalidSession(HttpServletResponse response, Integer sessionID) {
+        if (sessionID == null) {
+            response.setStatus(401);
+            return true;
+        }
+
+        try {
+            if (SessionController.checkSessionExists(sessionID)) {
+                return false;
+            } else {
+                response.setStatus(401);
+                return true;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return true;
+        }
+    }
+
     public static boolean checkSessionExists(Integer sessionId) throws SQLException {
         Connection connection = DBConnection.instance.getConnection();
         String query = "SELECT * FROM sessions WHERE session_id = " + sessionId;
