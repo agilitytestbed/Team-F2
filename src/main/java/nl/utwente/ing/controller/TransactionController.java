@@ -36,8 +36,12 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("api/v1/transactions")
@@ -47,8 +51,8 @@ public class TransactionController {
      * Returns a list of all the transactions that are available to the session id.
      * @param response to edit the status code of the response
      */
-    @RequestMapping(value = "", method = RequestMethod.GET)
-    public List<Transaction> getAllTransactions(@RequestHeader(value = "X-session-id", required = false) Integer
+    @RequestMapping(value = "", method = RequestMethod.GET, produces = "application/json")
+    public String getAllTransactions(@RequestHeader(value = "X-session-id", required = false) Integer
                                                             headerSessionID,
                                                 @RequestParam(value = "session_id", required = false) Integer
                                                         paramSessionID,
@@ -57,11 +61,12 @@ public class TransactionController {
                                                 @RequestParam(value = "category", required = false) String category,
                                                 HttpServletResponse response) {
 
-        String transactionsQuery = "SELECT t.transaction_id, t.date, t.amount, t.external_iban, t.type, c.category_id, c.name\n" +
-                "FROM transactions t, categories c\n" +
-                "WHERE c.category_id = t.category_id AND\n" +
-                "      t.session_id = ? AND\n" +
-                "      c.session_id = t.session_id\n";
+        String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
+                "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
+                "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
+                "FROM transactions t, categories c " +
+                "WHERE t.session_id = ? " +
+                "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
 
         Integer sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
 
@@ -95,12 +100,18 @@ public class TransactionController {
 
             ResultSet result = statement.executeQuery();
             while (result.next()) {
+                Category resultCategory = null;
+                int categoryId = result.getInt("category_id");
+                if (!result.wasNull()) {
+                    resultCategory = new Category(categoryId, result.getString("category_name"));
+                }
+
                 transactions.add(new Transaction(result.getInt(1),
                         result.getString(2),
                         result.getLong(3),
                         result.getString(4),
                         Type.valueOf(result.getString(5)),
-                        new Category(result.getInt(6), result.getString(7))
+                        resultCategory
                         ));
             }
 
@@ -109,7 +120,10 @@ public class TransactionController {
         }
 
         response.setStatus(200);
-        return transactions;
+
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
+        return gsonBuilder.create().toJson(transactions);
     }
 
     /**
@@ -135,7 +149,7 @@ public class TransactionController {
             System.out.println("amount = " + amount);
 
             GsonBuilder gsonBuilder = new GsonBuilder();
-            gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionDeserializer());
+            gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
             Gson gson = gsonBuilder.create();
 
             Transaction transaction = gson.fromJson(body, Transaction.class);
@@ -210,9 +224,60 @@ public class TransactionController {
      * Returns a specific transaction corresponding to the transaction id.
      * @param response to edit the status code of the response
      */
-    @RequestMapping(value = "/{transactionId}", method = RequestMethod.GET)
-    public void getTransaction(HttpServletResponse response) {
-        response.setStatus(200);
+    @RequestMapping(value = "/{transactionId}", method = RequestMethod.GET, produces = "application/json")
+    public String getTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
+                                      @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                      @PathVariable("transactionId") int transactionId,
+                                      HttpServletResponse response) {
+        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+
+        if (SessionController.isInvalidSession(response, sessionID)) {
+            return null;
+        }
+
+        String query = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
+                "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
+                "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
+                "FROM transactions t, categories c " +
+                "WHERE t.session_id = ? " +
+                "AND t.transaction_id = ? " +
+                "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
+
+        try (Connection connection = DBConnection.instance.getConnection();
+             PreparedStatement statement = connection.prepareStatement(query)
+        ) {
+            statement.setInt(1, sessionID);
+            statement.setInt(2, transactionId);
+            ResultSet result = statement.executeQuery();
+            if (result.next()) {
+                response.setStatus(200);
+
+                Category category = null;
+                int categoryId = result.getInt("category_id");
+                if (!result.wasNull()) {
+                    category = new Category(categoryId, result.getString("category_name"));
+                }
+
+                Transaction transaction = new Transaction(result.getInt("transaction_id"),
+                        result.getString("date"),
+                        result.getLong("amount"),
+                        result.getString("external_iban"),
+                        Type.valueOf(result.getString("type")),
+                        category
+                );
+
+                GsonBuilder gsonBuilder = new GsonBuilder();
+                gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
+                return gsonBuilder.create().toJson(transaction);
+            } else {
+                response.setStatus(404);
+                return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return null;
+        }
     }
 
     /**
@@ -244,11 +309,19 @@ public class TransactionController {
     }
 }
 
-class TransactionDeserializer implements JsonDeserializer<Transaction> {
+class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerializer<Transaction> {
+
+    private static DecimalFormat format = (DecimalFormat) NumberFormat.getCurrencyInstance(Locale.GERMANY);
+    private static DecimalFormatSymbols symbols = format.getDecimalFormatSymbols();
+
+    TransactionAdapter() {
+        symbols.setCurrencySymbol(""); // We don't want a currency symbol in the serialization.
+        format.setDecimalFormatSymbols(symbols);
+    }
 
     @Override
-    public Transaction deserialize(JsonElement json, java.lang.reflect.Type type, JsonDeserializationContext
-            jsonDeserializationContext) throws JsonParseException {
+    public Transaction deserialize(JsonElement json, java.lang.reflect.Type type,
+                                   JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
         JsonObject jsonObject = json.getAsJsonObject();
 
         String date = jsonObject.get("date").getAsString();
@@ -263,5 +336,26 @@ class TransactionDeserializer implements JsonDeserializer<Transaction> {
         }
 
         return new Transaction(null, date, amount, externalIBAN, transactionType, category);
+    }
+
+    @Override
+    public JsonElement serialize(Transaction transaction, java.lang.reflect.Type type,
+                                 JsonSerializationContext jsonSerializationContext) {
+        JsonObject object = new JsonObject();
+
+        object.addProperty("id", transaction.getId());
+        object.addProperty("date", transaction.getDate());
+        object.addProperty("amount", format.format(transaction.getAmount() / 100.0).trim());
+        object.addProperty("externalIBAN", transaction.getExternalIBAN());
+        object.addProperty("type", transaction.getType().toString());
+
+        if (transaction.getCategory() != null) {
+            JsonObject categoryObject = new JsonObject();
+            categoryObject.addProperty("id", transaction.getCategory().getId());
+            categoryObject.addProperty("name", transaction.getCategory().getName());
+            object.add("category", categoryObject);
+        }
+
+        return object;
     }
 }

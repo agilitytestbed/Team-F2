@@ -30,8 +30,8 @@ public class Transaction {
     private String date;
     private Long amount;
     private String externalIBAN;
-    private Category category;
     private Type type;
+    private Category category;
 
     /**
      * Constructor to create a transaction without a category.
