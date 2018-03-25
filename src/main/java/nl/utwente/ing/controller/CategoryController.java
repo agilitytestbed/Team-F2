@@ -27,6 +27,7 @@ package nl.utwente.ing.controller;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import nl.utwente.ing.controller.database.DBConnection;
+import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.Category;
 import org.springframework.web.bind.annotation.*;
 
@@ -218,20 +219,6 @@ public class CategoryController {
         }
 
         String query = "DELETE FROM categories WHERE category_id = ? AND session_id = ?";
-
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement statement = connection.prepareStatement(query)
-        ) {
-            statement.setInt(1, id);
-            statement.setInt(2, sessionID);
-            if (statement.executeUpdate() == 1) {
-                response.setStatus(204);
-            } else {
-                response.setStatus(404);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            response.setStatus(500);
-        }
+        DBUtil.executeDelete(response, query, id, sessionID);
     }
 }

@@ -26,6 +26,7 @@ package nl.utwente.ing.controller;
 
 import com.google.gson.*;
 import nl.utwente.ing.controller.database.DBConnection;
+import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.Category;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
@@ -52,14 +53,12 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "", method = RequestMethod.GET, produces = "application/json")
-    public String getAllTransactions(@RequestHeader(value = "X-session-id", required = false) Integer
-                                                            headerSessionID,
-                                                @RequestParam(value = "session_id", required = false) Integer
-                                                        paramSessionID,
-                                                @RequestParam(value = "offset", defaultValue = "0") int offset,
-                                                @RequestParam(value = "limit", defaultValue = "20") int limit,
-                                                @RequestParam(value = "category", required = false) String category,
-                                                HttpServletResponse response) {
+    public String getAllTransactions(@RequestHeader(value = "X-session-id", required = false) Integer headerSessionID,
+                                     @RequestParam(value = "session_id", required = false) Integer paramSessionID,
+                                     @RequestParam(value = "offset", defaultValue = "0") int offset,
+                                     @RequestParam(value = "limit", defaultValue = "20") int limit,
+                                     @RequestParam(value = "category", required = false) String category,
+                                     HttpServletResponse response) {
 
         String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
@@ -117,6 +116,8 @@ public class TransactionController {
 
         } catch (SQLException e) {
             e.printStackTrace();
+            response.setStatus(500);
+            return null;
         }
 
         response.setStatus(200);
@@ -131,10 +132,8 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "", method = RequestMethod.POST)
-    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) Integer
-                                              headerSessionID,
-                                         @RequestParam(value = "session_id", required = false) Integer
-                                              paramSessionID,
+    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) Integer headerSessionID,
+                                         @RequestParam(value = "session_id", required = false) Integer paramSessionID,
                                          @RequestBody String body,
                                          HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
@@ -144,10 +143,6 @@ public class TransactionController {
         }
 
         try {
-            JsonParser parser = new JsonParser();
-            String amount = parser.parse(body).getAsJsonObject().get("amount").getAsString().replace(",", "");
-            System.out.println("amount = " + amount);
-
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
             Gson gson = gsonBuilder.create();
@@ -213,7 +208,7 @@ public class TransactionController {
                 response.setStatus(500);
                 return null;
             }
-        } catch (JsonSyntaxException e) {
+        } catch (JsonSyntaxException | NumberFormatException e) {
             e.printStackTrace();
             response.setStatus(405);
             return null;
@@ -226,9 +221,9 @@ public class TransactionController {
      */
     @RequestMapping(value = "/{transactionId}", method = RequestMethod.GET, produces = "application/json")
     public String getTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                      @RequestParam(value = "session_id", required = false) Integer querySessionID,
-                                      @PathVariable("transactionId") int transactionId,
-                                      HttpServletResponse response) {
+                                 @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                 @PathVariable("transactionId") int transactionId,
+                                 HttpServletResponse response) {
         Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
@@ -282,12 +277,62 @@ public class TransactionController {
 
     /**
      * Updates the given transaction corresponding to the transaction id.
-     * @param transaction updated transaction
      * @param response to edit the status code of the response
      */
-    @RequestMapping(value = "/{transactionId}", method = RequestMethod.PUT)
-    public void updateTransaction(@RequestBody Transaction transaction, HttpServletResponse response) {
-        response.setStatus(200);
+    @RequestMapping(value = "/{transactionId}", method = RequestMethod.PUT, produces = "application/json")
+    public String updateTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
+                                    @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                    @PathVariable("transactionId") int transactionId,
+                                    @RequestBody String body,
+                                    HttpServletResponse response) {
+        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+
+        if (SessionController.isInvalidSession(response, sessionID)) {
+            return null;
+        }
+
+        try {
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
+            Gson gson = gsonBuilder.create();
+
+            Transaction transaction = gson.fromJson(body, Transaction.class);
+            transaction.setId(transactionId);
+
+            if (transaction.getDate() == null || transaction.getAmount() == null
+                    || transaction.getExternalIBAN() == null || transaction.getType() == null) {
+                throw new JsonSyntaxException("Transaction body is not formatted properly");
+            }
+
+            String query = "UPDATE transactions SET date = ?, amount = ?, external_iban = ?, type = ? " +
+                    "WHERE transaction_id = ? AND session_id = ?";
+
+            try (Connection connection = DBConnection.instance.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(query)
+            ) {
+                statement.setString(1, transaction.getDate());
+                statement.setLong(2, transaction.getAmount());
+                statement.setString(3, transaction.getExternalIBAN());
+                statement.setString(4, transaction.getType().toString().toLowerCase());
+                statement.setInt(5, transactionId);
+                statement.setInt(6, sessionID);
+                if (statement.executeUpdate() == 1) {
+                    response.setStatus(200);
+                    return getTransaction(headerSessionID, querySessionID, transactionId, response);
+                } else {
+                    response.setStatus(404);
+                    return null;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                response.setStatus(500);
+                return null;
+            }
+        } catch (JsonSyntaxException | NumberFormatException e) {
+            e.printStackTrace();
+            response.setStatus(405);
+            return null;
+        }
     }
 
     /**
@@ -295,17 +340,63 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "/{transactionId}", method = RequestMethod.DELETE)
-    public void deleteTransaction(HttpServletResponse response) {
-        response.setStatus(204);
+    public void deleteTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
+                                  @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                  @PathVariable("transactionId") int transactionId,
+                                  HttpServletResponse response) {
+        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+
+        if (SessionController.isInvalidSession(response, sessionID)) {
+            return;
+        }
+
+        String query = "DELETE FROM transactions WHERE transaction_id = ? AND session_id = ?";
+        DBUtil.executeDelete(response, query, transactionId, sessionID);
     }
 
     /**
      * Assigns a category to the specified transaction corresponding to the transaction id.
      * @param response to edit the status code of the response.
      */
-    @RequestMapping(value = "/{transactionId}/category", method = RequestMethod.PATCH)
-    public void assignCategoryToTransaction(HttpServletResponse response) {
-        response.setStatus(200);
+    @RequestMapping(value = "/{transactionId}/category", method = RequestMethod.PATCH, produces = "application/json")
+    public String assignCategoryToTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
+                                              @RequestParam(value = "session_id", required = false) Integer querySessionID,
+                                              @PathVariable("transactionId") int transactionId,
+                                              @RequestBody String body,
+                                              HttpServletResponse response) {
+        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+
+        if (SessionController.isInvalidSession(response, sessionID)) {
+            return null;
+        }
+
+        int categoryId;
+        try {
+            categoryId = new Gson().fromJson(body, JsonObject.class).get("category_id").getAsInt();
+        } catch (NullPointerException | NumberFormatException e) {
+            // Body was not formatted according to API specification, treat as if no ID was specified.
+            response.setStatus(404);
+            return null;
+        }
+
+        String query = "UPDATE transactions SET category_id = ? WHERE transaction_id = ? AND session_id = ?";
+        try (Connection connection = DBConnection.instance.getConnection();
+             PreparedStatement statement = connection.prepareStatement(query)
+        ) {
+            statement.setInt(1, categoryId);
+            statement.setInt(2, transactionId);
+            statement.setInt(3, sessionID);
+            if (statement.executeUpdate() == 1) {
+                return getTransaction(headerSessionID, querySessionID, transactionId, response);
+            } else {
+                response.setStatus(404);
+                return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return null;
+        }
     }
 }
 

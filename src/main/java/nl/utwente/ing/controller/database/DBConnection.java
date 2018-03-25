@@ -27,7 +27,6 @@ package nl.utwente.ing.controller.database;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 import java.beans.PropertyVetoException;
-import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -49,7 +48,7 @@ public class DBConnection {
      * Creates a new connection pool to the local SQLite database.
      * Requires the SQLite database to exist.
      */
-    public DBConnection() {
+    private DBConnection() {
         if (databasePool == null) {
             initializePool();
         }
