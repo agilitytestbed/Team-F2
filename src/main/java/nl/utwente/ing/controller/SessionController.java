@@ -57,7 +57,8 @@ public class SessionController {
             preparedStatement.executeUpdate();
             preparedStatement.close();
 
-            return String.format("{\"session_id\": %d}", sessionId);
+            response.setStatus(201);
+            return String.format("{\"id\": \"%d\"}", sessionId);
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
