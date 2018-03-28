@@ -41,10 +41,10 @@ import java.util.List;
 public class CategoryController {
 
     @RequestMapping(value = "", method = RequestMethod.GET)
-    public List<Category> getCategories(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                        @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public List<Category> getCategories(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                        @RequestParam(value = "session_id", required = false) String querySessionID,
                                         HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -54,7 +54,7 @@ public class CategoryController {
         try (Connection connection = DBConnection.instance.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(query)
         ){
-            preparedStatement.setInt(1, sessionID);
+            preparedStatement.setString(1, sessionID);
             ResultSet resultSet = preparedStatement.executeQuery();
 
             List<Category> results = new ArrayList<>();
@@ -73,11 +73,11 @@ public class CategoryController {
     }
 
     @RequestMapping(value = "", method = RequestMethod.POST)
-    public Category addCategory(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public Category addCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                @RequestParam(value = "session_id", required = false) String querySessionID,
                                 @RequestBody String body,
                                 HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -99,7 +99,7 @@ public class CategoryController {
                  PreparedStatement resultStatement = connection.prepareStatement(resultQuery)
             ) {
                 insertStatement.setString(1, category.getName());
-                insertStatement.setInt(2, sessionID);
+                insertStatement.setString(2, sessionID);
                 if (insertStatement.executeUpdate() != 1) {
                     response.setStatus(405);
                     return null;
@@ -127,11 +127,11 @@ public class CategoryController {
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.GET)
-    public Category getCategory(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                               @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public Category getCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                               @RequestParam(value = "session_id", required = false) String querySessionID,
                                @PathVariable("id") int id,
                                HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -143,7 +143,7 @@ public class CategoryController {
              PreparedStatement statement = connection.prepareStatement(query)
         ) {
             statement.setInt(1, id);
-            statement.setInt(2, sessionID);
+            statement.setString(2, sessionID);
             ResultSet resultSet = statement.executeQuery();
             if (resultSet.next()) {
                 response.setStatus(200);
@@ -160,12 +160,12 @@ public class CategoryController {
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.PUT)
-    public Category putCategory(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public Category putCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                @RequestParam(value = "session_id", required = false) String querySessionID,
                                 @PathVariable("id") int id,
                                 @RequestBody String body,
                                 HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -187,7 +187,7 @@ public class CategoryController {
             ) {
                 statement.setString(1, category.getName());
                 statement.setInt(2, id);
-                statement.setInt(3, sessionID);
+                statement.setString(3, sessionID);
                 if (statement.executeUpdate() == 1) {
                     response.setStatus(200);
                     return category;
@@ -208,11 +208,11 @@ public class CategoryController {
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE)
-    public void deleteCategory(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                               @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public void deleteCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                               @RequestParam(value = "session_id", required = false) String querySessionID,
                                @PathVariable("id") int id,
                                HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return;

@@ -20,12 +20,12 @@ public class DBUtil {
      * @param id the ID of the object to delete
      * @param sessionID the session ID of the owner of the object to delete
      */
-    public static void executeDelete(HttpServletResponse response, String query, int id, int sessionID) {
+    public static void executeDelete(HttpServletResponse response, String query, int id, String sessionID) {
         try (Connection connection = DBConnection.instance.getConnection();
              PreparedStatement statement = connection.prepareStatement(query)
         ) {
             statement.setInt(1, id);
-            statement.setInt(2, sessionID);
+            statement.setString(2, sessionID);
             if (statement.executeUpdate() == 1) {
                 response.setStatus(204);
             } else {

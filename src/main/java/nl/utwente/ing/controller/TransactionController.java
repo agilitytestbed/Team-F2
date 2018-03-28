@@ -53,8 +53,8 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "", method = RequestMethod.GET, produces = "application/json")
-    public String getAllTransactions(@RequestHeader(value = "X-session-id", required = false) Integer headerSessionID,
-                                     @RequestParam(value = "session_id", required = false) Integer paramSessionID,
+    public String getAllTransactions(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
+                                     @RequestParam(value = "session_id", required = false) String paramSessionID,
                                      @RequestParam(value = "offset", defaultValue = "0") int offset,
                                      @RequestParam(value = "limit", defaultValue = "20") int limit,
                                      @RequestParam(value = "category", required = false) String category,
@@ -67,7 +67,7 @@ public class TransactionController {
                 "WHERE t.session_id = ? " +
                 "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
 
-        Integer sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
+        String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -86,7 +86,7 @@ public class TransactionController {
             Connection connection = DBConnection.instance.getConnection();
 
             PreparedStatement statement = connection.prepareStatement(transactionsQuery);
-            statement.setInt(1, sessionID);
+            statement.setString(1, sessionID);
 
             if (category != null) {
                 statement.setString(2, category);
@@ -132,11 +132,11 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "", method = RequestMethod.POST)
-    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) Integer headerSessionID,
-                                         @RequestParam(value = "session_id", required = false) Integer paramSessionID,
+    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
+                                         @RequestParam(value = "session_id", required = false) String paramSessionID,
                                          @RequestBody String body,
                                          HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -170,7 +170,7 @@ public class TransactionController {
                 }
 
                 statement.setString(5, transaction.getType().toString().toLowerCase());
-                statement.setInt(6, sessionID);
+                statement.setString(6, sessionID);
 
                 if (statement.executeUpdate() != 1) {
                     response.setStatus(405);
@@ -220,11 +220,11 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "/{transactionId}", method = RequestMethod.GET, produces = "application/json")
-    public String getTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                 @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public String getTransaction(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                 @RequestParam(value = "session_id", required = false) String querySessionID,
                                  @PathVariable("transactionId") int transactionId,
                                  HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -241,7 +241,7 @@ public class TransactionController {
         try (Connection connection = DBConnection.instance.getConnection();
              PreparedStatement statement = connection.prepareStatement(query)
         ) {
-            statement.setInt(1, sessionID);
+            statement.setString(1, sessionID);
             statement.setInt(2, transactionId);
             ResultSet result = statement.executeQuery();
             if (result.next()) {
@@ -280,12 +280,12 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "/{transactionId}", method = RequestMethod.PUT, produces = "application/json")
-    public String updateTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                    @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public String updateTransaction(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                    @RequestParam(value = "session_id", required = false) String querySessionID,
                                     @PathVariable("transactionId") int transactionId,
                                     @RequestBody String body,
                                     HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -315,7 +315,7 @@ public class TransactionController {
                 statement.setString(3, transaction.getExternalIBAN());
                 statement.setString(4, transaction.getType().toString().toLowerCase());
                 statement.setInt(5, transactionId);
-                statement.setInt(6, sessionID);
+                statement.setString(6, sessionID);
                 if (statement.executeUpdate() == 1) {
                     response.setStatus(200);
                     return getTransaction(headerSessionID, querySessionID, transactionId, response);
@@ -340,11 +340,11 @@ public class TransactionController {
      * @param response to edit the status code of the response
      */
     @RequestMapping(value = "/{transactionId}", method = RequestMethod.DELETE)
-    public void deleteTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                  @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public void deleteTransaction(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                  @RequestParam(value = "session_id", required = false) String querySessionID,
                                   @PathVariable("transactionId") int transactionId,
                                   HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return;
@@ -359,12 +359,12 @@ public class TransactionController {
      * @param response to edit the status code of the response.
      */
     @RequestMapping(value = "/{transactionId}/category", method = RequestMethod.PATCH, produces = "application/json")
-    public String assignCategoryToTransaction(@RequestHeader(value = "X-session-ID", required = false) Integer headerSessionID,
-                                              @RequestParam(value = "session_id", required = false) Integer querySessionID,
+    public String assignCategoryToTransaction(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                              @RequestParam(value = "session_id", required = false) String querySessionID,
                                               @PathVariable("transactionId") int transactionId,
                                               @RequestBody String body,
                                               HttpServletResponse response) {
-        Integer sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         if (SessionController.isInvalidSession(response, sessionID)) {
             return null;
@@ -385,7 +385,7 @@ public class TransactionController {
         ) {
             statement.setInt(1, categoryId);
             statement.setInt(2, transactionId);
-            statement.setInt(3, sessionID);
+            statement.setString(3, sessionID);
             if (statement.executeUpdate() == 1) {
                 return getTransaction(headerSessionID, querySessionID, transactionId, response);
             } else {

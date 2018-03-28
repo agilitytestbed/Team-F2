@@ -34,31 +34,29 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Random;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/sessions")
 public class SessionController {
 
-    private Random random = new Random();
-
     @RequestMapping(value = "", method = RequestMethod.POST)
     public String getSession(HttpServletResponse response) {
         try {
-            int sessionId = random.nextInt();
+            String sessionId = UUID.randomUUID().toString();
             while (checkSessionExists(sessionId)) {
-                sessionId = random.nextInt();
+                sessionId = UUID.randomUUID().toString();
             }
 
             Connection connection = DBConnection.instance.getConnection();
             String query = "INSERT INTO sessions (session_id) VALUES (?);";
             PreparedStatement preparedStatement = connection.prepareStatement(query);
-            preparedStatement.setInt(1, sessionId);
+            preparedStatement.setString(1, sessionId);
             preparedStatement.executeUpdate();
             preparedStatement.close();
 
             response.setStatus(201);
-            return String.format("{\"id\": \"%d\"}", sessionId);
+            return String.format("{\"id\": \"%s\"}", sessionId);
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
@@ -66,7 +64,7 @@ public class SessionController {
         }
     }
 
-    public static boolean isInvalidSession(HttpServletResponse response, Integer sessionID) {
+    public static boolean isInvalidSession(HttpServletResponse response, String sessionID) {
         if (sessionID == null) {
             response.setStatus(401);
             return true;
@@ -86,11 +84,14 @@ public class SessionController {
         }
     }
 
-    public static boolean checkSessionExists(Integer sessionId) throws SQLException {
+    private static boolean checkSessionExists(String sessionId) throws SQLException {
         Connection connection = DBConnection.instance.getConnection();
-        String query = "SELECT * FROM sessions WHERE session_id = " + sessionId;
-        ResultSet result = connection.createStatement().executeQuery(query);
+        String query = "SELECT * FROM sessions WHERE session_id = ?";
+        PreparedStatement preparedStatement = connection.prepareStatement(query);
+        preparedStatement.setString(1,  sessionId);
+        ResultSet result = preparedStatement.executeQuery();
         boolean exists = result.next();
+        preparedStatement.close();
         connection.close();
         return exists;
     }
