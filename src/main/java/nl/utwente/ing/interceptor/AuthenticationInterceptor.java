@@ -22,7 +22,29 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.api;
+package nl.utwente.ing.interceptor;
 
-public class DPAService {
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import nl.utwente.ing.controller.SessionController;
+import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+
+public class AuthenticationInterceptor extends HandlerInterceptorAdapter {
+
+    /**
+     * Verifies whether a session is valid before sending the user to the controller in order to keep all authentication
+     * in a centralized place. Does not perform any checks when the user is requesting a new session.
+     */
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        if (request.getRequestURI().equals("/api/v1/sessions")) {
+            return true;
+        }
+
+        String headerSessionID = request.getHeader("X-session-ID");
+        String querySessionID = request.getParameter("session_id");
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+
+        return SessionController.isValidSession(response, sessionID);
+    }
 }

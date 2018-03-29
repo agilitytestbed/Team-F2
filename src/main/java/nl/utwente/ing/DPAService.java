@@ -22,7 +22,16 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.model;
+package nl.utwente.ing;
 
-public class Category {
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class DPAService {
+
+	public static void main(String[] args) {
+		SpringApplication.run(DPAService.class, args);
+	}
+
 }

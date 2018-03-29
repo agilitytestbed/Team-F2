@@ -22,7 +22,28 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.controller;
+package nl.utwente.ing.model;
 
-public class Reactor {
+public class Category {
+
+    private Integer id;
+    private String name;
+
+    public Category(Integer id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
 }

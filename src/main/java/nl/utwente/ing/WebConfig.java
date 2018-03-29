@@ -22,7 +22,20 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.teamf.paymentassistant.model;
+package nl.utwente.ing;
 
-public class Transaction {
+import nl.utwente.ing.interceptor.AuthenticationInterceptor;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+
+@EnableWebMvc
+@Configuration
+public class WebConfig extends WebMvcConfigurerAdapter {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new AuthenticationInterceptor());
+    }
 }
