@@ -64,23 +64,23 @@ public class SessionController {
         }
     }
 
-    public static boolean isInvalidSession(HttpServletResponse response, String sessionID) {
+    public static boolean isValidSession(HttpServletResponse response, String sessionID) {
         if (sessionID == null) {
             response.setStatus(401);
-            return true;
+            return false;
         }
 
         try {
             if (SessionController.checkSessionExists(sessionID)) {
-                return false;
+                return true;
             } else {
                 response.setStatus(401);
-                return true;
+                return false;
             }
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
-            return true;
+            return false;
         }
     }
 

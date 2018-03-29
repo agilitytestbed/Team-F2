@@ -46,10 +46,6 @@ public class CategoryController {
                                         HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
-
         String query = "SELECT c.category_id, c.name FROM categories c WHERE c.session_id = ?;";
         try (Connection connection = DBConnection.instance.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(query)
@@ -78,10 +74,6 @@ public class CategoryController {
                                 @RequestBody String body,
                                 HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
 
         try {
             Gson gson = new Gson();
@@ -128,15 +120,10 @@ public class CategoryController {
 
     @RequestMapping(value = "/{id}", method = RequestMethod.GET)
     public Category getCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
-                               @RequestParam(value = "session_id", required = false) String querySessionID,
-                               @PathVariable("id") int id,
-                               HttpServletResponse response) {
+                                @RequestParam(value = "session_id", required = false) String querySessionID,
+                                @PathVariable("id") int id,
+                                HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
-
         String query = "SELECT c.category_id, c.name FROM categories c WHERE category_id = ? AND session_id = ?";
 
         try (Connection connection = DBConnection.instance.getConnection();
@@ -166,10 +153,6 @@ public class CategoryController {
                                 @RequestBody String body,
                                 HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
 
         try {
             Gson gson = new Gson();
@@ -213,11 +196,6 @@ public class CategoryController {
                                @PathVariable("id") int id,
                                HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return;
-        }
-
         String query = "DELETE FROM categories WHERE category_id = ? AND session_id = ?";
         DBUtil.executeDelete(response, query, id, sessionID);
     }

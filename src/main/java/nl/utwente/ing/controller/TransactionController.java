@@ -66,12 +66,7 @@ public class TransactionController {
                 "FROM transactions t, categories c " +
                 "WHERE t.session_id = ? " +
                 "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
-
         String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
 
         if (category != null) {
             transactionsQuery += "AND c.name = ?";
@@ -137,10 +132,6 @@ public class TransactionController {
                                          @RequestBody String body,
                                          HttpServletResponse response) {
         String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
 
         try {
             GsonBuilder gsonBuilder = new GsonBuilder();
@@ -226,10 +217,6 @@ public class TransactionController {
                                  HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
-
         String query = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
                 "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
                 "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
@@ -287,10 +274,6 @@ public class TransactionController {
                                     HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
-
         try {
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
@@ -345,11 +328,6 @@ public class TransactionController {
                                   @PathVariable("transactionId") int transactionId,
                                   HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return;
-        }
-
         String query = "DELETE FROM transactions WHERE transaction_id = ? AND session_id = ?";
         DBUtil.executeDelete(response, query, transactionId, sessionID);
     }
@@ -365,10 +343,6 @@ public class TransactionController {
                                               @RequestBody String body,
                                               HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
-
-        if (SessionController.isInvalidSession(response, sessionID)) {
-            return null;
-        }
 
         int categoryId;
         try {

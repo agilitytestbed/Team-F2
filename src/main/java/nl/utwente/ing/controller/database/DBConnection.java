@@ -66,7 +66,6 @@ public class DBConnection {
             databasePool.setMinPoolSize(5);
             databasePool.setAcquireIncrement(5);
             databasePool.setMaxPoolSize(20);
-
         } catch (PropertyVetoException e) {
             e.printStackTrace();
         }
