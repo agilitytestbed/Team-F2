@@ -63,7 +63,7 @@ public class TransactionController {
         String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
-                "FROM transactions t, categories c " +
+                "FROM (transactions t LEFT JOIN categories c ON 1=1) " +
                 "WHERE t.session_id = ? " +
                 "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
         String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
@@ -368,6 +368,14 @@ public class TransactionController {
             }
         } catch (SQLException e) {
             e.printStackTrace();
+
+            // Since the error code is not set for this SQLException the message has to be used in order to find
+            // out what the error was, in case of a foreign key constraint a 404 should be thrown instead of a 500.
+            if (e.getMessage().startsWith("[SQLITE_CONSTRAINT]")) {
+                response.setStatus(404);
+                return null;
+            }
+
             response.setStatus(500);
             return null;
         }
