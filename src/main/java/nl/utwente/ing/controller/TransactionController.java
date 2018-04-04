@@ -126,8 +126,8 @@ public class TransactionController {
      * Creates a new transaction that is linked to the current sessions id.
      * @param response to edit the status code of the response
      */
-    @RequestMapping(value = "", method = RequestMethod.POST)
-    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
+    @RequestMapping(value = "", method = RequestMethod.POST, produces = "application/json")
+    public String createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
                                          @RequestParam(value = "session_id", required = false) String paramSessionID,
                                          @RequestBody String body,
                                          HttpServletResponse response) {
@@ -183,12 +183,14 @@ public class TransactionController {
                     if (transactionSet.next()) {
 
                         response.setStatus(201);
-                        return new Transaction(transactionSet.getInt(1),
+                        Transaction resultTransaction = new Transaction(transactionSet.getInt(1),
                                 transactionSet.getString(2),
                                 transactionSet.getLong(3),
                                 transactionSet.getString(4),
                                 Type.valueOf(transactionSet.getString(5))
                                 );
+
+                        return gsonBuilder.create().toJson(resultTransaction);
                     }
                 }
                 response.setStatus(405);
@@ -384,7 +386,7 @@ public class TransactionController {
 
 class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerializer<Transaction> {
 
-    private static DecimalFormat format = (DecimalFormat) NumberFormat.getCurrencyInstance(Locale.GERMANY);
+    private static DecimalFormat format = (DecimalFormat) NumberFormat.getCurrencyInstance(Locale.US);
     private static DecimalFormatSymbols symbols = format.getDecimalFormatSymbols();
 
     TransactionAdapter() {
@@ -398,7 +400,7 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
         JsonObject jsonObject = json.getAsJsonObject();
 
         String date = jsonObject.get("date").getAsString();
-        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(",", ""));
+        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(".", ""));
         String externalIBAN = jsonObject.get("externalIBAN").getAsString();
         Type transactionType = Type.valueOf(jsonObject.get("type").getAsString());
         Category category = null;
