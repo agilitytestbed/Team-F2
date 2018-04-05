@@ -73,10 +73,13 @@ public class DBConnection {
 
     /**
      * Returns an initialized connection to the SQLite database.
+     * Enables Foreign Key Support for this connection as they are disabled by default.
      *
      * @return connection to the SQLite database
      */
     public Connection getConnection() throws SQLException {
-        return databasePool.getConnection();
+        Connection connection = databasePool.getConnection();
+        connection.createStatement().execute("PRAGMA foreign_keys = ON");
+        return connection;
     }
 }

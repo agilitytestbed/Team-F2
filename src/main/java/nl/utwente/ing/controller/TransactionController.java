@@ -37,12 +37,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 @RestController
 @RequestMapping("api/v1/transactions")
@@ -63,7 +59,7 @@ public class TransactionController {
         String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
-                "FROM transactions t, categories c " +
+                "FROM (transactions t LEFT JOIN categories c ON 1=1) " +
                 "WHERE t.session_id = ? " +
                 "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
         String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
@@ -126,8 +122,8 @@ public class TransactionController {
      * Creates a new transaction that is linked to the current sessions id.
      * @param response to edit the status code of the response
      */
-    @RequestMapping(value = "", method = RequestMethod.POST)
-    public Transaction createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
+    @RequestMapping(value = "", method = RequestMethod.POST, produces = "application/json")
+    public String createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
                                          @RequestParam(value = "session_id", required = false) String paramSessionID,
                                          @RequestBody String body,
                                          HttpServletResponse response) {
@@ -183,12 +179,14 @@ public class TransactionController {
                     if (transactionSet.next()) {
 
                         response.setStatus(201);
-                        return new Transaction(transactionSet.getInt(1),
+                        Transaction resultTransaction = new Transaction(transactionSet.getInt(1),
                                 transactionSet.getString(2),
                                 transactionSet.getLong(3),
                                 transactionSet.getString(4),
                                 Type.valueOf(transactionSet.getString(5))
                                 );
+
+                        return gsonBuilder.create().toJson(resultTransaction);
                     }
                 }
                 response.setStatus(405);
@@ -368,6 +366,14 @@ public class TransactionController {
             }
         } catch (SQLException e) {
             e.printStackTrace();
+
+            // Since the error code is not set for this SQLException the message has to be used in order to find
+            // out what the error was, in case of a foreign key constraint a 404 should be thrown instead of a 500.
+            if (e.getMessage().startsWith("[SQLITE_CONSTRAINT]")) {
+                response.setStatus(404);
+                return null;
+            }
+
             response.setStatus(500);
             return null;
         }
@@ -376,21 +382,13 @@ public class TransactionController {
 
 class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerializer<Transaction> {
 
-    private static DecimalFormat format = (DecimalFormat) NumberFormat.getCurrencyInstance(Locale.GERMANY);
-    private static DecimalFormatSymbols symbols = format.getDecimalFormatSymbols();
-
-    TransactionAdapter() {
-        symbols.setCurrencySymbol(""); // We don't want a currency symbol in the serialization.
-        format.setDecimalFormatSymbols(symbols);
-    }
-
     @Override
     public Transaction deserialize(JsonElement json, java.lang.reflect.Type type,
                                    JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
         JsonObject jsonObject = json.getAsJsonObject();
 
         String date = jsonObject.get("date").getAsString();
-        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(",", ""));
+        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(".", ""));
         String externalIBAN = jsonObject.get("externalIBAN").getAsString();
         Type transactionType = Type.valueOf(jsonObject.get("type").getAsString());
         Category category = null;
@@ -410,7 +408,7 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
 
         object.addProperty("id", transaction.getId());
         object.addProperty("date", transaction.getDate());
-        object.addProperty("amount", format.format(transaction.getAmount() / 100.0).trim());
+        object.addProperty("amount", transaction.getAmount() / 100.0);
         object.addProperty("externalIBAN", transaction.getExternalIBAN());
         object.addProperty("type", transaction.getType().toString());
 
