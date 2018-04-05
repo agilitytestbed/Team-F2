@@ -386,14 +386,6 @@ public class TransactionController {
 
 class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerializer<Transaction> {
 
-    private static DecimalFormat format = (DecimalFormat) NumberFormat.getCurrencyInstance(Locale.US);
-    private static DecimalFormatSymbols symbols = format.getDecimalFormatSymbols();
-
-    TransactionAdapter() {
-        symbols.setCurrencySymbol(""); // We don't want a currency symbol in the serialization.
-        format.setDecimalFormatSymbols(symbols);
-    }
-
     @Override
     public Transaction deserialize(JsonElement json, java.lang.reflect.Type type,
                                    JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
@@ -420,7 +412,7 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
 
         object.addProperty("id", transaction.getId());
         object.addProperty("date", transaction.getDate());
-        object.addProperty("amount", format.format(transaction.getAmount() / 100.0).trim());
+        object.addProperty("amount", transaction.getAmount() / 100.0);
         object.addProperty("externalIBAN", transaction.getExternalIBAN());
         object.addProperty("type", transaction.getType().toString());
 
