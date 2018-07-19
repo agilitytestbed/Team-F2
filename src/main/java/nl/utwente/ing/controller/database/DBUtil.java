@@ -1,8 +1,12 @@
 package nl.utwente.ing.controller.database;
 
+import nl.utwente.ing.model.Category;
+import org.apache.commons.dbutils.DbUtils;
+
 import javax.servlet.http.HttpServletResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 public class DBUtil {
@@ -21,19 +25,62 @@ public class DBUtil {
      * @param sessionID the session ID of the owner of the object to delete
      */
     public static void executeDelete(HttpServletResponse response, String query, int id, String sessionID) {
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement statement = connection.prepareStatement(query)
-        ) {
-            statement.setInt(1, id);
-            statement.setString(2, sessionID);
-            if (statement.executeUpdate() == 1) {
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, id);
+            preparedStatement.setString(2, sessionID);
+            if (preparedStatement.executeUpdate() == 1) {
                 response.setStatus(204);
             } else {
                 response.setStatus(404);
             }
+            connection.commit();
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
+        } finally {
+            DbUtils.closeQuietly(preparedStatement);
+            DbUtils.closeQuietly(connection);
+        }
+    }
+
+    public static boolean checkCategorySession(String session_id, Category category) {
+        if (category != null) {
+            if (category.getId() != null) {
+                String query = "SELECT category_id FROM categories WHERE session_id = ? AND category_id = ?;";
+                Connection connection = null;
+                PreparedStatement preparedStatement = null;
+                ResultSet resultSet = null;
+                try {
+                    connection = DBConnection.instance.getConnection();
+                    preparedStatement = connection.prepareStatement(query);
+
+                    preparedStatement.setString(1, session_id);
+                    preparedStatement.setInt(2, category.getId());
+
+                    resultSet = preparedStatement.executeQuery();
+                    return resultSet.next();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                } finally {
+                    DbUtils.closeQuietly(connection, preparedStatement, resultSet);
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    public static void executeCommit(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.commit();
+            } catch (SQLException ignored) {
+            }
         }
     }
 }

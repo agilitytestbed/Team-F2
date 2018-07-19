@@ -33,14 +33,15 @@ public class Transaction {
     private Type type;
     private Category category;
 
-    /**
-     * Constructor to create a transaction without a category.
-     * @param id transaction id
-     * @param amount transaction amount in cents
-     */
-    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type) {
-        this(id, date, amount, externalIBAN, type,null);
+    public String getDescription() {
+        return description;
     }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    private String description;
 
     /**
      * Constructor to create a transaction with a category.
@@ -50,14 +51,14 @@ public class Transaction {
      * @param type type of transaction
      * @param category transaction category
      */
-    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type, Category category) {
+    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type, Category category, String description) {
         this.id = id;
         this.date = date;
         this.amount = amount;
         this.externalIBAN = externalIBAN;
         this.type = type;
         this.category = category;
-
+        this.description = description;
     }
 
     public Integer getId() {
