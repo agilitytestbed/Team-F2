@@ -25,6 +25,8 @@
 package nl.utwente.ing.controller;
 
 import nl.utwente.ing.controller.database.DBConnection;
+import nl.utwente.ing.controller.database.DBUtil;
+import org.apache.commons.dbutils.DbUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,25 +44,33 @@ public class SessionController {
 
     @RequestMapping(value = "", method = RequestMethod.POST)
     public String getSession(HttpServletResponse response) {
+
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+
         try {
+            connection = DBConnection.instance.getConnection();
             String sessionId = UUID.randomUUID().toString();
             while (checkSessionExists(sessionId)) {
                 sessionId = UUID.randomUUID().toString();
             }
 
-            Connection connection = DBConnection.instance.getConnection();
             String query = "INSERT INTO sessions (session_id) VALUES (?);";
-            PreparedStatement preparedStatement = connection.prepareStatement(query);
+            preparedStatement = connection.prepareStatement(query);
             preparedStatement.setString(1, sessionId);
             preparedStatement.executeUpdate();
-            preparedStatement.close();
 
             response.setStatus(201);
+
             return String.format("{\"id\": \"%s\"}", sessionId);
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(preparedStatement);
+            DbUtils.closeQuietly(connection);
         }
     }
 
@@ -85,14 +95,20 @@ public class SessionController {
     }
 
     private static boolean checkSessionExists(String sessionId) throws SQLException {
-        Connection connection = DBConnection.instance.getConnection();
-        String query = "SELECT * FROM sessions WHERE session_id = ?";
-        PreparedStatement preparedStatement = connection.prepareStatement(query);
-        preparedStatement.setString(1,  sessionId);
-        ResultSet result = preparedStatement.executeQuery();
-        boolean exists = result.next();
-        preparedStatement.close();
-        connection.close();
-        return exists;
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            String query = "SELECT * FROM sessions WHERE session_id = ?";
+            preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setString(1,  sessionId);
+            resultSet = preparedStatement.executeQuery();
+            return resultSet.next();
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
+        }
     }
 }

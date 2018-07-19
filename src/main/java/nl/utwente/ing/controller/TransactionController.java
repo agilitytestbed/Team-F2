@@ -30,6 +30,7 @@ import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.Category;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
+import org.apache.commons.dbutils.DbUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
@@ -56,66 +57,70 @@ public class TransactionController {
                                      @RequestParam(value = "category", required = false) String category,
                                      HttpServletResponse response) {
 
-        String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
+        String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
+        String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, t.description, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
                 "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
                 "FROM (transactions t LEFT JOIN categories c ON 1=1) " +
                 "WHERE t.session_id = ? " +
+                "AND c.session_id = t.session_id " +
                 "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
-        String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
-
         if (category != null) {
             transactionsQuery += "AND c.name = ?";
         }
-
         transactionsQuery += "LIMIT ? OFFSET ?;";
+
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
 
         List<Transaction> transactions = new ArrayList<>();
 
         try {
-
-            Connection connection = DBConnection.instance.getConnection();
-
-            PreparedStatement statement = connection.prepareStatement(transactionsQuery);
-            statement.setString(1, sessionID);
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(transactionsQuery);
+            preparedStatement.setString(1, sessionID);
 
             if (category != null) {
-                statement.setString(2, category);
-                statement.setInt(3, limit);
-                statement.setInt(4, offset);
+                preparedStatement.setString(2, category);
+                preparedStatement.setInt(3, limit);
+                preparedStatement.setInt(4, offset);
             } else {
-                statement.setInt(2, limit);
-                statement.setInt(3, offset);
+                preparedStatement.setInt(2, limit);
+                preparedStatement.setInt(3, offset);
             }
 
-            ResultSet result = statement.executeQuery();
-            while (result.next()) {
+            resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()) {
                 Category resultCategory = null;
-                int categoryId = result.getInt("category_id");
-                if (!result.wasNull()) {
-                    resultCategory = new Category(categoryId, result.getString("category_name"));
+                int categoryId = resultSet.getInt("category_id");
+                if (!resultSet.wasNull()) {
+                    resultCategory = new Category(categoryId, resultSet.getString("category_name"));
                 }
 
-                transactions.add(new Transaction(result.getInt(1),
-                        result.getString(2),
-                        result.getLong(3),
-                        result.getString(4),
-                        Type.valueOf(result.getString(5)),
-                        resultCategory
+                transactions.add(new Transaction(resultSet.getInt("transaction_id"),
+                        resultSet.getString("date"),
+                        resultSet.getLong("amount"),
+                        resultSet.getString("external_iban"),
+                        Type.valueOf(resultSet.getString("type")),
+                        resultCategory,
+                        resultSet.getString("description")
                         ));
             }
 
+            response.setStatus(200);
+
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
+            return gsonBuilder.create().toJson(transactions);
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
-
-        response.setStatus(200);
-
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
-        return gsonBuilder.create().toJson(transactions);
     }
 
     /**
@@ -124,9 +129,9 @@ public class TransactionController {
      */
     @RequestMapping(value = "", method = RequestMethod.POST, produces = "application/json")
     public String createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
-                                         @RequestParam(value = "session_id", required = false) String paramSessionID,
-                                         @RequestBody String body,
-                                         HttpServletResponse response) {
+                                    @RequestParam(value = "session_id", required = false) String paramSessionID,
+                                    @RequestBody String body,
+                                    HttpServletResponse response) {
         String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
 
         try {
@@ -141,60 +146,81 @@ public class TransactionController {
                 throw new JsonSyntaxException("Transaction is missing attributes");
             }
 
-            String query = "INSERT INTO transactions (date, amount, external_iban, category_id, type, session_id) VALUES " +
-                    "(?, ?, ?, ?, ?, ?);";
-            String resultQuery = "SELECT last_insert_rowid() FROM transactions LIMIT 1;";
+            if (DBUtil.checkCategorySession(sessionID, transaction.getCategory())) {
+                String query = "INSERT INTO transactions (date, amount, external_iban, category_id, type, session_id) VALUES " +
+                        "(?, ?, ?, ?, ?, ?);";
+                String resultQuery = "SELECT last_insert_rowid();";
+                String categoryRuleQuery = "SELECT description, iBAN, type, category_id FROM category_rules WHERE session_id = ? " +
+                        "ORDER BY datetime(creation_date_time) DESC;";
 
-            try (Connection connection = DBConnection.instance.getConnection();
-                 PreparedStatement resultStatement = connection.prepareStatement(resultQuery);
-                 PreparedStatement statement = connection.prepareStatement(query)
-            ) {
-                statement.setString(1, transaction.getDate());
-                statement.setDouble(2, transaction.getAmount());
-                statement.setString(3, transaction.getExternalIBAN());
-                if (transaction.getCategory() != null) {
-                    statement.setInt(4, transaction.getCategory().getId());
-                }
+                Connection connection = null;
+                PreparedStatement preparedStatement = null;
+                PreparedStatement resultPreparedStatement = null;
+                PreparedStatement categoryRulesPreparedStatement = null;
+                ResultSet resultSet = null;
+                ResultSet categoryRulesResultSet = null;
 
-                statement.setString(5, transaction.getType().toString().toLowerCase());
-                statement.setString(6, sessionID);
+                try {
+                    connection = DBConnection.instance.getConnection();
+                    resultPreparedStatement = connection.prepareStatement(resultQuery);
+                    preparedStatement = connection.prepareStatement(query);
+                    categoryRulesPreparedStatement = connection.prepareStatement(categoryRuleQuery);
 
-                if (statement.executeUpdate() != 1) {
+                    preparedStatement.setString(1, transaction.getDate());
+                    preparedStatement.setDouble(2, transaction.getAmount());
+                    preparedStatement.setString(3, transaction.getExternalIBAN());
+                    if (transaction.getCategory() != null) {
+                        preparedStatement.setInt(4, transaction.getCategory().getId());
+                    } else {
+                        categoryRulesPreparedStatement.setInt(1, Integer.parseInt(sessionID));
+
+                        categoryRulesResultSet = categoryRulesPreparedStatement.executeQuery();
+
+                        while(categoryRulesResultSet.next()) {
+                            String categoryRuleDescription = categoryRulesResultSet.getString(1);
+                            String categoryRuleIBAN = categoryRulesResultSet.getString(2);
+                            String categoryRuleType = categoryRulesResultSet.getString(3);
+                            if ((categoryRuleDescription.equals("") || categoryRuleDescription.equals(transaction.getDescription())) &&
+                                    (categoryRuleIBAN.equals("") || categoryRuleIBAN.equals(transaction.getExternalIBAN())) &&
+                                    (categoryRuleType.equals("") || categoryRuleType.equals(transaction.getType().toString()))) {
+                                CategoryController categoryController = new CategoryController();
+                                transaction.setCategory(categoryController.getCategory(headerSessionID, paramSessionID, categoryRulesResultSet.getInt(4), response));
+                            }
+                        }
+                    }
+
+                    preparedStatement.setString(5, transaction.getType().toString().toLowerCase());
+                    preparedStatement.setString(6, sessionID);
+
+                    if (preparedStatement.executeUpdate() != 1) {
+                        response.setStatus(405);
+                        return null;
+                    }
+
+                    resultSet = resultPreparedStatement.executeQuery();
+
+                    if (resultSet.next()) {
+                        connection.commit();
+                        String returnTransaction = getTransaction(headerSessionID, paramSessionID, resultSet.getInt(1), response);
+                        response.setStatus(201);
+                        return returnTransaction;
+                    }
                     response.setStatus(405);
                     return null;
+
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                    response.setStatus(500);
+                    return null;
+                } finally {
+                    DBUtil.executeCommit(connection);
+                    DbUtils.closeQuietly(categoryRulesResultSet);
+                    DbUtils.closeQuietly(categoryRulesPreparedStatement);
+                    DbUtils.closeQuietly(preparedStatement);
+                    DbUtils.closeQuietly(connection, resultPreparedStatement, resultSet);
                 }
-
-                ResultSet result = resultStatement.executeQuery();
-
-                if (result.next()) {
-                    transaction.setId(result.getInt(1));
-
-                    resultQuery = "SELECT transaction_id, date, amount, external_iban, type, category_id, session_id FROM transactions WHERE transaction_id = ?";
-
-                    PreparedStatement transactionStatement = connection.prepareStatement(resultQuery);
-                    transactionStatement.setInt(1, result.getInt(1));
-
-                    ResultSet transactionSet = transactionStatement.executeQuery();
-
-                    if (transactionSet.next()) {
-
-                        response.setStatus(201);
-                        Transaction resultTransaction = new Transaction(transactionSet.getInt(1),
-                                transactionSet.getString(2),
-                                transactionSet.getLong(3),
-                                transactionSet.getString(4),
-                                Type.valueOf(transactionSet.getString(5))
-                                );
-
-                        return gsonBuilder.create().toJson(resultTransaction);
-                    }
-                }
-                response.setStatus(405);
-                return null;
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-                response.setStatus(500);
+            } else {
+                response.setStatus(404);
                 return null;
             }
         } catch (JsonSyntaxException | NumberFormatException e) {
@@ -215,35 +241,42 @@ public class TransactionController {
                                  HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        String query = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, " +
+        String query = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, t.description, " +
                 "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
                 "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
                 "FROM transactions t, categories c " +
                 "WHERE t.session_id = ? " +
                 "AND t.transaction_id = ? " +
-                "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
+                "AND (t.category_id IS NULL OR c.category_id = t.category_id);";
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
 
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement statement = connection.prepareStatement(query)
-        ) {
-            statement.setString(1, sessionID);
-            statement.setInt(2, transactionId);
-            ResultSet result = statement.executeQuery();
-            if (result.next()) {
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
+
+            preparedStatement.setString(1, sessionID);
+            preparedStatement.setInt(2, transactionId);
+
+            resultSet = preparedStatement.executeQuery();
+
+            if (resultSet.next()) {
                 response.setStatus(200);
 
                 Category category = null;
-                int categoryId = result.getInt("category_id");
-                if (!result.wasNull()) {
-                    category = new Category(categoryId, result.getString("category_name"));
+                int categoryId = resultSet.getInt("category_id");
+                if (!resultSet.wasNull()) {
+                    category = new Category(categoryId, resultSet.getString("category_name"));
                 }
 
-                Transaction transaction = new Transaction(result.getInt("transaction_id"),
-                        result.getString("date"),
-                        result.getLong("amount"),
-                        result.getString("external_iban"),
-                        Type.valueOf(result.getString("type")),
-                        category
+                Transaction transaction = new Transaction(resultSet.getInt("transaction_id"),
+                        resultSet.getString("date"),
+                        resultSet.getLong("amount"),
+                        resultSet.getString("external_iban"),
+                        Type.valueOf(resultSet.getString("type")),
+                        category,
+                        resultSet.getString("description")
                 );
 
                 GsonBuilder gsonBuilder = new GsonBuilder();
@@ -257,6 +290,9 @@ public class TransactionController {
             e.printStackTrace();
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
     }
 
@@ -285,29 +321,44 @@ public class TransactionController {
                 throw new JsonSyntaxException("Transaction body is not formatted properly");
             }
 
-            String query = "UPDATE transactions SET date = ?, amount = ?, external_iban = ?, type = ? " +
-                    "WHERE transaction_id = ? AND session_id = ?";
+            if (DBUtil.checkCategorySession(sessionID, transaction.getCategory())) {
+                String query = "UPDATE transactions SET date = ?, amount = ?, external_iban = ?, type = ?, description = ? " +
+                        "WHERE transaction_id = ? AND session_id = ?";
+                Connection connection = null;
+                PreparedStatement preparedStatement = null;
 
-            try (Connection connection = DBConnection.instance.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(query)
-            ) {
-                statement.setString(1, transaction.getDate());
-                statement.setLong(2, transaction.getAmount());
-                statement.setString(3, transaction.getExternalIBAN());
-                statement.setString(4, transaction.getType().toString().toLowerCase());
-                statement.setInt(5, transactionId);
-                statement.setString(6, sessionID);
-                if (statement.executeUpdate() == 1) {
-                    response.setStatus(200);
-                    return getTransaction(headerSessionID, querySessionID, transactionId, response);
-                } else {
+                try {
+                    connection = DBConnection.instance.getConnection();
+                    preparedStatement = connection.prepareStatement(query);
+
+                    preparedStatement.setString(1, transaction.getDate());
+                    preparedStatement.setLong(2, transaction.getAmount());
+                    preparedStatement.setString(3, transaction.getExternalIBAN());
+                    preparedStatement.setString(4, transaction.getType().toString().toLowerCase());
+                    preparedStatement.setString(5, transaction.getDate());
+                    preparedStatement.setInt(6, transactionId);
+                    preparedStatement.setString(7, sessionID);
+
+                    if (preparedStatement.executeUpdate() == 1) {
+                        response.setStatus(200);
+                        connection.commit();
+                        return getTransaction(headerSessionID, querySessionID, transactionId, response);
+                    } else {
+                        response.setStatus(404);
+                        return null;
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                    response.setStatus(500);
+                    return null;
+                } finally {
+                    DBUtil.executeCommit(connection);
+                    DbUtils.closeQuietly(preparedStatement);
+                    DbUtils.closeQuietly(connection);
+                }
+            } else {
                     response.setStatus(404);
                     return null;
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                response.setStatus(500);
-                return null;
             }
         } catch (JsonSyntaxException | NumberFormatException e) {
             e.printStackTrace();
@@ -343,6 +394,7 @@ public class TransactionController {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         int categoryId;
+
         try {
             categoryId = new Gson().fromJson(body, JsonObject.class).get("category_id").getAsInt();
         } catch (NullPointerException | NumberFormatException e) {
@@ -352,13 +404,16 @@ public class TransactionController {
         }
 
         String query = "UPDATE transactions SET category_id = ? WHERE transaction_id = ? AND session_id = ?";
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement statement = connection.prepareStatement(query)
-        ) {
-            statement.setInt(1, categoryId);
-            statement.setInt(2, transactionId);
-            statement.setString(3, sessionID);
-            if (statement.executeUpdate() == 1) {
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, categoryId);
+            preparedStatement.setInt(2, transactionId);
+            preparedStatement.setString(3, sessionID);
+            if (preparedStatement.executeUpdate() == 1) {
                 return getTransaction(headerSessionID, querySessionID, transactionId, response);
             } else {
                 response.setStatus(404);
@@ -376,6 +431,10 @@ public class TransactionController {
 
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(preparedStatement);
+            DbUtils.closeQuietly(connection);
         }
     }
 }
@@ -392,13 +451,14 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
         String externalIBAN = jsonObject.get("externalIBAN").getAsString();
         Type transactionType = Type.valueOf(jsonObject.get("type").getAsString());
         Category category = null;
+        String description = jsonObject.get("description").getAsString();
 
         if (json.getAsJsonObject().has("category")) {
             category = new Category(jsonObject.get("category").getAsJsonObject().get("id").getAsInt(),
                     jsonObject.get("category").getAsJsonObject().get("name").getAsString());
         }
 
-        return new Transaction(null, date, amount, externalIBAN, transactionType, category);
+        return new Transaction(null, date, amount, externalIBAN, transactionType, category, description);
     }
 
     @Override

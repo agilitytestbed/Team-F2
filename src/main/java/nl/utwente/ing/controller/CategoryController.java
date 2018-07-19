@@ -29,6 +29,7 @@ import com.google.gson.JsonSyntaxException;
 import nl.utwente.ing.controller.database.DBConnection;
 import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.Category;
+import org.apache.commons.dbutils.DbUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
@@ -41,19 +42,24 @@ import java.util.List;
 public class CategoryController {
 
     @RequestMapping(value = "", method = RequestMethod.GET)
-    public List<Category> getCategories(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
-                                        @RequestParam(value = "session_id", required = false) String querySessionID,
-                                        HttpServletResponse response) {
-        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
+    public List<Category> getAllCategories(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                           @RequestParam(value = "session_id", required = false) String querySessionID,
+                                           HttpServletResponse response) {
 
+        String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
         String query = "SELECT c.category_id, c.name FROM categories c WHERE c.session_id = ?;";
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(query)
-        ){
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
             preparedStatement.setString(1, sessionID);
-            ResultSet resultSet = preparedStatement.executeQuery();
+            resultSet = preparedStatement.executeQuery();
 
             List<Category> results = new ArrayList<>();
+
             while (resultSet.next()) {
                 int id = resultSet.getInt(1);
                 String name = resultSet.getString(2);
@@ -65,14 +71,17 @@ public class CategoryController {
             e.printStackTrace();
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
     }
 
     @RequestMapping(value = "", method = RequestMethod.POST)
-    public Category addCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
-                                @RequestParam(value = "session_id", required = false) String querySessionID,
-                                @RequestBody String body,
-                                HttpServletResponse response) {
+    public Category createCategory(@RequestHeader(value = "X-session-ID", required = false) String headerSessionID,
+                                   @RequestParam(value = "session_id", required = false) String querySessionID,
+                                   @RequestBody String body,
+                                   HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
         try {
@@ -84,32 +93,40 @@ public class CategoryController {
             }
 
             String insertQuery = "INSERT INTO categories (name, session_id) VALUES (?, ?);";
-            String resultQuery = "SELECT last_insert_rowid() FROM categories LIMIT 1;";
+            String idQuery = "SELECT last_insert_rowid()";
 
-            try (Connection connection = DBConnection.instance.getConnection();
-                 PreparedStatement insertStatement = connection.prepareStatement(insertQuery);
-                 PreparedStatement resultStatement = connection.prepareStatement(resultQuery)
-            ) {
-                insertStatement.setString(1, category.getName());
-                insertStatement.setString(2, sessionID);
-                if (insertStatement.executeUpdate() != 1) {
+            Connection connection = null;
+            PreparedStatement preparedStatement = null;
+            PreparedStatement idPreparedStatement = null;
+            ResultSet resultSet = null;
+
+            try {
+                connection = DBConnection.instance.getConnection();
+                preparedStatement = connection.prepareStatement(insertQuery);
+
+                preparedStatement.setString(1, category.getName());
+                preparedStatement.setString(2, sessionID);
+
+                if (preparedStatement.executeUpdate() != 1) {
                     response.setStatus(405);
                     return null;
                 }
 
-                ResultSet resultSet = resultStatement.executeQuery();
-                if (resultSet.next()) {
-                    category.setId(resultSet.getInt(1));
-                    response.setStatus(201);
-                    return category;
-                } else {
-                    response.setStatus(405);
-                    return null;
-                }
+                idPreparedStatement = connection.prepareStatement(idQuery);
+                resultSet = idPreparedStatement.executeQuery();
+                int id = resultSet.getInt(1);
+                connection.commit();
+                Category resultCategory = getCategory(headerSessionID, querySessionID, id, response);
+                response.setStatus(201);
+                return resultCategory;
             } catch (SQLException e) {
                 e.printStackTrace();
                 response.setStatus(500);
                 return null;
+            } finally {
+                DBUtil.executeCommit(connection);
+                DbUtils.closeQuietly(preparedStatement);
+                DbUtils.closeQuietly(connection, idPreparedStatement, resultSet);
             }
         } catch (JsonSyntaxException e) {
             e.printStackTrace();
@@ -126,23 +143,32 @@ public class CategoryController {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
         String query = "SELECT c.category_id, c.name FROM categories c WHERE category_id = ? AND session_id = ?";
 
-        try (Connection connection = DBConnection.instance.getConnection();
-             PreparedStatement statement = connection.prepareStatement(query)
-        ) {
-            statement.setInt(1, id);
-            statement.setString(2, sessionID);
-            ResultSet resultSet = statement.executeQuery();
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, id);
+            preparedStatement.setString(2, sessionID);
+            resultSet = preparedStatement.executeQuery();
+
+            Category category = null;
+            response.setStatus(404);
             if (resultSet.next()) {
                 response.setStatus(200);
-                return new Category(id, resultSet.getString(2));
-            } else {
-                response.setStatus(404);
-                return null;
+                category = new Category(id, resultSet.getString(2));
             }
+
+            return category;
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
             return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
     }
 
@@ -164,24 +190,33 @@ public class CategoryController {
             }
 
             String query = "UPDATE categories SET name = ? WHERE category_id = ? AND session_id = ?";
+            Connection connection = null;
+            PreparedStatement preparedStatement = null;
 
-            try (Connection connection = DBConnection.instance.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(query)
-            ) {
-                statement.setString(1, category.getName());
-                statement.setInt(2, id);
-                statement.setString(3, sessionID);
-                if (statement.executeUpdate() == 1) {
+            try {
+                connection = DBConnection.instance.getConnection();
+                preparedStatement = connection.prepareStatement(query);
+
+                preparedStatement.setString(1, category.getName());
+                preparedStatement.setInt(2, id);
+                preparedStatement.setString(3, sessionID);
+
+                Category result = null;
+                response.setStatus(404);
+                if (preparedStatement.executeUpdate() == 1) {
                     response.setStatus(200);
-                    return category;
-                } else {
-                    response.setStatus(404);
-                    return null;
+                    result = category;
                 }
+
+                return result;
             } catch (SQLException e) {
                 e.printStackTrace();
                 response.setStatus(500);
                 return null;
+            } finally {
+                DBUtil.executeCommit(connection);
+                DbUtils.closeQuietly(preparedStatement);
+                DbUtils.closeQuietly(connection);
             }
         } catch (JsonSyntaxException e) {
             e.printStackTrace();
