@@ -22,7 +22,6 @@ import java.util.List;
 @RequestMapping("/api/v1/balance/history")
 public class BalanceHistoryController {
 
-
     @RequestMapping(value = "", method = RequestMethod.GET)
     public List<BalanceHistory> getBalanceHistory(@RequestHeader(value = "X-session-id", required = false) String
                                                          headerSessionID,
@@ -30,17 +29,22 @@ public class BalanceHistoryController {
                                                   @RequestParam(value = "interval", defaultValue = "month") String interval,
                                                   @RequestParam(value = "intervals", defaultValue = "24") int intervals,
                                                   HttpServletResponse response) {
-
         String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
+        List<DateTime> timeIntervals;
+        try {
+            timeIntervals = parseTimeIntervals(interval, intervals);
+        } catch (JsonParseException e) {
+            e.printStackTrace();
+            response.setStatus(405);
+            return null;
+        }
+
         String transactionsQuery = "SELECT transaction_id AS id, amount, date, external_iban, type, description FROM " +
                 "transactions WHERE session_id = ? ORDER BY datetime(date);";
-
         Connection connection = null;
         PreparedStatement preparedStatement = null;
         ResultSet resultSet = null;
-
         List<Transaction> transactions = new ArrayList<>();
-
         try {
             connection = DBConnection.instance.getConnection();
             preparedStatement = connection.prepareStatement(transactionsQuery);
@@ -61,78 +65,65 @@ public class BalanceHistoryController {
             DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
 
-        try {
-            return parseTransactions(transactions, intervals, interval);
-        } catch (JsonParseException e) {
-            response.setStatus(405);
-            return null;
-        }
+        return getBalanceHistories(parseTransactions(transactions, timeIntervals), timeIntervals);
     }
 
-    private static List<BalanceHistory> parseTransactions(List<Transaction> transactions, int intervals, String
-            interval)
-            throws JsonParseException {
+    private static List<DateTime> parseTimeIntervals(String interval, int intervals) throws JsonParseException {
+        List<DateTime> timeIntervals = new ArrayList<>();
 
-        List<DateTime> dateSplit = new ArrayList<>();
-
-        DateTime beginTime = new DateTime();
+        DateTime now = new DateTime();
 
         switch (interval.toLowerCase()) {
             case "hour"  :
                 for (int i = intervals; i >= 0; i--) {
-                    dateSplit.add(new DateTime(beginTime).minusHours(i));
+                    timeIntervals.add(new DateTime(now).minusHours(i));
                 }
                 break;
             case "day"   :
                 for (int i = intervals; i >= 0; i--) {
-                    dateSplit.add(new DateTime(beginTime).minusDays(i));
+                    timeIntervals.add(new DateTime(now).minusDays(i));
                 }
                 break;
             case "week"  :
                 for (int i = intervals; i >= 0; i--) {
-                    dateSplit.add(new DateTime(beginTime).minusWeeks(i));
+                    timeIntervals.add(new DateTime(now).minusWeeks(i));
                 }
                 break;
             case "month" :
                 for (int i = intervals; i >= 0; i--) {
-                    dateSplit.add(new DateTime(beginTime).minusMonths(i));
+                    timeIntervals.add(new DateTime(now).minusMonths(i));
                 }
                 break;
             case "year"  :
                 for (int i = intervals; i >= 0; i--) {
-                    dateSplit.add(new DateTime(beginTime).minusYears(i));
+                    timeIntervals.add(new DateTime(now).minusYears(i));
                 }
                 break;
             default      :
                 throw new JsonParseException("intervals not of valid format");
         }
+        return timeIntervals;
+    }
 
-        List<List<Transaction>> result = new ArrayList<>();
+    private static List<List<Transaction>> parseTransactions(List<Transaction> transactions, List<DateTime>
+            timeIntervals) {
+        List<List<Transaction>> transactionsInTimeIntervals = new ArrayList<>();
 
-        for (DateTime date : dateSplit) {
-            List<Transaction> currentResult = new ArrayList<>();
+        for (DateTime endTime : timeIntervals) {
+            List<Transaction> currentTimeIntervalTransactions = new ArrayList<>();
 
-            while (!transactions.isEmpty() && DateTime.parse(transactions.get(0).getDate()).isBefore(date)) {
-                currentResult.add(transactions.get(0));
+            while (!transactions.isEmpty() && DateTime.parse(transactions.get(0).getDate()).isBefore(endTime)) {
+                currentTimeIntervalTransactions.add(transactions.get(0));
                 transactions.remove(0);
             }
 
-            result.add(currentResult);
+            transactionsInTimeIntervals.add(currentTimeIntervalTransactions);
         }
-
-        List<List<Long>> balanceHistories = getBalanceHistories(result);
-        List<BalanceHistory> balanceHistoryList = new ArrayList<>();
-
-        for (int i = 0; i < balanceHistories.size(); i++) {
-            List<Long> balanceHistory = balanceHistories.get(i);
-            balanceHistoryList.add(new BalanceHistory(balanceHistory.get(0), balanceHistory.get(1), balanceHistory
-                    .get(2), balanceHistory.get(3), balanceHistory.get(4), dateSplit.get(i)));
-        }
-
-        return balanceHistoryList;
+        return transactionsInTimeIntervals;
     }
 
-    private static List<List<Long>> getBalanceHistories(List<List<Transaction>> transactionList) {
+    private static List<BalanceHistory> getBalanceHistories(List<List<Transaction>> transactionList, List<DateTime>
+            dateIntervals) {
 
         long balance = 0;
 
@@ -146,10 +137,11 @@ public class BalanceHistoryController {
 
         transactionList.remove(0);
 
-        List<List<Long>> result = new ArrayList<>();
+        List<BalanceHistory> balanceHistoryList = new ArrayList<>();
 
-        for (List<Transaction> currentTransactions : transactionList) {
-            List<Long> currentResult = new ArrayList<>();
+        for (int i = 0; i < transactionList.size(); i++) {
+            List<Transaction> currentTransactions = transactionList.get(i);
+
             long open = balance;
             long low = balance;
             long high = balance;
@@ -172,13 +164,9 @@ public class BalanceHistoryController {
             }
 
             long close = balance;
-            currentResult.add(open);
-            currentResult.add(close);
-            currentResult.add(high);
-            currentResult.add(low);
-            currentResult.add(volume);
-            result.add(currentResult);
+
+            balanceHistoryList.add(new BalanceHistory(open, close, high, low, volume, dateIntervals.get(i)));
         }
-        return result;
+        return balanceHistoryList;
     }
 }

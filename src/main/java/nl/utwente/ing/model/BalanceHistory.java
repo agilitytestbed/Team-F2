@@ -21,27 +21,27 @@ public class BalanceHistory {
         this.timestamp = timestamp;
     }
 
-    public long getOpen() {
-        return open;
+    public double getOpen() {
+        return open / 100.0;
     }
 
-    public long getClose() {
-        return close;
+    public double getClose() {
+        return close / 100.0;
     }
 
-    public long getHigh() {
-        return high;
+    public double getHigh() {
+        return high / 100.0;
     }
 
-    public long getLow() {
-        return low;
+    public double getLow() {
+        return low / 100.0;
     }
 
-    public long getVolume() {
-        return volume;
+    public double getVolume() {
+        return volume / 100.0;
     }
 
-    public DateTime getTimestamp() {
-        return timestamp;
+    public long getTimestamp() {
+        return timestamp.getMillis() / 1000;
     }
 }
