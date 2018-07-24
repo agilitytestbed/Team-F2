@@ -172,7 +172,7 @@ public class TransactionController {
                     if (transaction.getCategory() != null) {
                         preparedStatement.setInt(4, transaction.getCategory().getId());
                     } else {
-                        categoryRulesPreparedStatement.setInt(1, Integer.parseInt(sessionID));
+                        categoryRulesPreparedStatement.setString(1, sessionID);
 
                         categoryRulesResultSet = categoryRulesPreparedStatement.executeQuery();
 
@@ -201,9 +201,9 @@ public class TransactionController {
 
                     if (resultSet.next()) {
                         connection.commit();
-                        String returnTransaction = getTransaction(headerSessionID, paramSessionID, resultSet.getInt(1), response);
+                        transaction.setId(resultSet.getInt(1));
                         response.setStatus(201);
-                        return returnTransaction;
+                        return gson.toJson(transaction);
                     }
                     response.setStatus(405);
                     return null;
@@ -223,7 +223,7 @@ public class TransactionController {
                 response.setStatus(404);
                 return null;
             }
-        } catch (JsonSyntaxException | NumberFormatException e) {
+        } catch (NumberFormatException | JsonParseException e) {
             e.printStackTrace();
             response.setStatus(405);
             return null;
@@ -342,7 +342,7 @@ public class TransactionController {
                     if (preparedStatement.executeUpdate() == 1) {
                         response.setStatus(200);
                         connection.commit();
-                        return getTransaction(headerSessionID, querySessionID, transactionId, response);
+                        return gson.toJson(transaction);
                     } else {
                         response.setStatus(404);
                         return null;
@@ -360,7 +360,7 @@ public class TransactionController {
                     response.setStatus(404);
                     return null;
             }
-        } catch (JsonSyntaxException | NumberFormatException e) {
+        } catch (JsonParseException | NumberFormatException e) {
             e.printStackTrace();
             response.setStatus(405);
             return null;
@@ -445,6 +445,11 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
     public Transaction deserialize(JsonElement json, java.lang.reflect.Type type,
                                    JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
         JsonObject jsonObject = json.getAsJsonObject();
+
+        if (!jsonObject.has("date") || !jsonObject.has("amount") || !jsonObject.has("externalIBAN") || !jsonObject
+                .has("type") || !jsonObject.has("description")) {
+            throw new JsonParseException("Transaction does not have a valid format");
+        }
 
         String date = jsonObject.get("date").getAsString();
         Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(".", ""));

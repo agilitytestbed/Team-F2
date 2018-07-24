@@ -32,19 +32,10 @@ public class Transaction {
     private String externalIBAN;
     private Type type;
     private Category category;
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
     private String description;
 
     /**
-     * Constructor to create a transaction with a category.
+     * Constructor to create a transaction.
      * @param id transaction id
      * @param amount transaction amount in cents
      * @param externalIBAN IBAN number of the sender/receiver
@@ -85,24 +76,12 @@ public class Transaction {
         return type;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     public void setId(Integer id) {
         this.id = id;
-    }
-
-    public void setDate(String date) {
-        this.date = date;
-    }
-
-    public void setAmount(Long amount) {
-        this.amount = amount;
-    }
-
-    public void setExternalIBAN(String externalIBAN) {
-        this.externalIBAN = externalIBAN;
-    }
-
-    public void setType(Type type) {
-        this.type = type;
     }
 
     public void setCategory(Category category) {
