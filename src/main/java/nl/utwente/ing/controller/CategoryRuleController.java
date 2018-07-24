@@ -302,6 +302,8 @@ class CategoryRuleAdapter implements JsonDeserializer<CategoryRule>, JsonSeriali
     public CategoryRule deserialize(JsonElement json, java.lang.reflect.Type type,
                                    JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
         JsonObject jsonObject = json.getAsJsonObject();
+        
+        
 
         String description = jsonObject.has("description") ? jsonObject.get("description").getAsString() : null;
         String iBAN = jsonObject.has("iBAN") ? jsonObject.get("iBAN").getAsString() : null;
