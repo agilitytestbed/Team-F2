@@ -1,18 +1,19 @@
 package nl.utwente.ing.model;
 
+import org.joda.money.Money;
 import org.joda.time.DateTime;
 
-import java.util.Date;
+import java.math.BigDecimal;
 
 public class BalanceHistory {
-    private long open;
-    private long close;
-    private long high;
-    private long low;
-    private long volume;
+    private Money open;
+    private Money close;
+    private Money high;
+    private Money low;
+    private Money volume;
     private DateTime timestamp;
 
-    public BalanceHistory(long open, long close, long high, long low, long volume, DateTime timestamp) {
+    public BalanceHistory(Money open, Money close, Money high, Money low, Money volume, DateTime timestamp) {
         this.open = open;
         this.close = close;
         this.high = high;
@@ -21,24 +22,24 @@ public class BalanceHistory {
         this.timestamp = timestamp;
     }
 
-    public double getOpen() {
-        return open / 100.0;
+    public BigDecimal getOpen() {
+        return open.getAmount();
     }
 
-    public double getClose() {
-        return close / 100.0;
+    public BigDecimal getClose() {
+        return close.getAmount();
     }
 
-    public double getHigh() {
-        return high / 100.0;
+    public BigDecimal getHigh() {
+        return high.getAmount();
     }
 
-    public double getLow() {
-        return low / 100.0;
+    public BigDecimal getLow() {
+        return low.getAmount();
     }
 
-    public double getVolume() {
-        return volume / 100.0;
+    public BigDecimal getVolume() {
+        return volume.getAmount();
     }
 
     public long getTimestamp() {

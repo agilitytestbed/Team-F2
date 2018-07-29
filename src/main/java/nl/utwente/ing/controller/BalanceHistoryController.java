@@ -7,6 +7,8 @@ import nl.utwente.ing.model.BalanceHistory;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
 import org.apache.commons.dbutils.DbUtils;
+import org.joda.money.CurrencyUnit;
+import org.joda.money.Money;
 import org.joda.time.DateTime;
 import org.springframework.web.bind.annotation.*;
 
@@ -53,8 +55,9 @@ public class BalanceHistoryController {
             resultSet = preparedStatement.executeQuery();
 
             while (resultSet.next()) {
-                transactions.add(new Transaction(resultSet.getInt("id"), resultSet.getString("date"), resultSet
-                        .getLong("amount"), resultSet.getString("external_iban"), Type.valueOf(resultSet.getString
+                transactions.add(new Transaction(resultSet.getInt("id"), resultSet.getString("date"),
+                        Money.ofMinor(CurrencyUnit.EUR, resultSet
+                        .getLong("amount")), resultSet.getString("external_iban"), Type.valueOf(resultSet.getString
                         ("type")), null, null));
             }
         } catch (SQLException e) {
@@ -125,45 +128,44 @@ public class BalanceHistoryController {
     private static List<BalanceHistory> getBalanceHistories(List<List<Transaction>> transactionList, List<DateTime>
             dateIntervals) {
 
-        long balance = 0;
+        Money balance = Money.parse("EUR 0.00");
 
         for (Transaction transaction : transactionList.get(0)) {
             if (transaction.getType().equals(Type.deposit)) {
-                balance += transaction.getAmount();
+                balance = balance.plus(transaction.getAmount());
             } else {
-                balance -= transaction.getAmount();
+                balance = balance.minus(transaction.getAmount());
             }
         }
 
         transactionList.remove(0);
-
         List<BalanceHistory> balanceHistoryList = new ArrayList<>();
 
         for (int i = 0; i < transactionList.size(); i++) {
             List<Transaction> currentTransactions = transactionList.get(i);
 
-            long open = balance;
-            long low = balance;
-            long high = balance;
-            long volume = 0;
+            Money open = balance.abs();
+            Money low = balance.abs();
+            Money high = balance.abs();
+            Money volume = Money.parse("EUR 0.00");
 
             for (Transaction transaction : currentTransactions) {
-                long amount = transaction.getAmount();
+                Money amount = transaction.getAmount();
                 if (transaction.getType().equals(Type.deposit)) {
-                    balance += amount;
-                    if (balance > high) {
-                        high = balance;
+                    balance = balance.plus(amount);
+                    if (balance.isGreaterThan(high)) {
+                        high = balance.abs();
                     }
                 } else {
-                    balance -= amount;
-                    if (balance < low) {
-                        low = balance;
+                    balance = balance.minus(amount);
+                    if (balance.isLessThan(low)) {
+                        low = balance.abs();
                     }
                 }
-                volume += amount;
+                volume = volume.plus(amount);
             }
 
-            long close = balance;
+            Money close = balance.abs();
 
             balanceHistoryList.add(new BalanceHistory(open, close, high, low, volume, dateIntervals.get(i)));
         }
