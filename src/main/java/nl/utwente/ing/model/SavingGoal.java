@@ -25,6 +25,8 @@ package nl.utwente.ing.model;
 
 import org.joda.money.Money;
 
+import java.math.BigDecimal;
+
 public class SavingGoal {
     private Integer id;
     private String name;
@@ -41,5 +43,38 @@ public class SavingGoal {
         this.savePerMonth = savePerMonth;
         this.minimumBalanceRequired = minimumBalanceRequired;
         this.balance = balance;
+        if (balance == null) this.balance = Money.parse("EUR 0.00");
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public BigDecimal getGoal() {
+        return goal.getAmount();
+    }
+
+    public BigDecimal getSavePerMonth() {
+        return savePerMonth.getAmount();
+    }
+
+    public BigDecimal getMinimumBalanceRequired() {
+        return minimumBalanceRequired.getAmount();
+    }
+
+    public BigDecimal getBalance() {
+        return balance.getAmount();
+    }
+
+    public boolean containsNullElements() {
+        return name == null || goal == null || savePerMonth == null || minimumBalanceRequired == null;
     }
 }
