@@ -33,7 +33,6 @@ import org.apache.commons.dbutils.DbUtils;
 import org.joda.money.CurrencyUnit;
 import org.joda.money.Money;
 import org.joda.time.DateTime;
-import org.joda.time.Months;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
@@ -124,26 +123,42 @@ public class SavingGoalController {
             balance = firstTransaction.getType() == Type.deposit ? firstTransaction.getAmount() :
                     Money.of(CurrencyUnit.EUR, firstTransaction.getAmount().getAmount().negate());
             for (Transaction transaction : transactions) {
+                DateTime transactionTime = DateTime.parse(transaction.getDate());
+
                 if (transaction.getType().equals(Type.deposit)) {
                     balance = balance.plus(transaction.getAmount());
                 } else {
                     balance = balance.minus(transaction.getAmount());
                 }
 
-                int applicationTimes = getAmountOfMonthsBetweenDates(systemTime, DateTime.parse(transaction.getDate()));
-                for (int i = 0; i < applicationTimes; i++) {
-                    for (SavingGoal savingGoal : savingGoals) {
-                        if (Money.of(CurrencyUnit.EUR, savingGoal.getMinimumBalanceRequired()).isLessThan(balance)) {
-                            Money savePerMonth = Money.of(CurrencyUnit.EUR, savingGoal.getSavePerMonth());
-                            savingGoal.setBalance(Money.of(CurrencyUnit.EUR, savingGoal.getBalance()).plus(savePerMonth));
-                            balance = balance.minus(savePerMonth);
-                        }
-                    }
-                }
+                balance = calculateNewBalances(savingGoals, balance, systemTime, transactionTime);
                 systemTime = DateTime.parse(transaction.getDate());
             }
         }
         return savingGoals;
+    }
+
+    Money calculateNewBalances(List<SavingGoal> savingGoals, Money balance, DateTime systemTime,
+                               DateTime transactionTime) {
+        int applicationTimes = getAmountOfMonthsBetweenDates(systemTime, transactionTime);
+        for (int i = 0; i < applicationTimes; i++) {
+            for (SavingGoal savingGoal : savingGoals) {
+                Money savingGoalBalance = Money.of(CurrencyUnit.EUR, savingGoal.getBalance());
+                Money savingGoalMBR = Money.of(CurrencyUnit.EUR, savingGoal.getMinimumBalanceRequired());
+                Money savingGoalGoal = Money.of(CurrencyUnit.EUR, savingGoal.getGoal());
+                Money savingGoalSPM = Money.of(CurrencyUnit.EUR, savingGoal.getSavePerMonth());
+
+                if (savingGoalMBR.isLessThan(balance) && savingGoalBalance.isLessThan(savingGoalGoal)) {
+                    if (savingGoalGoal.isLessThan(savingGoalBalance.plus(savingGoalSPM))) {
+                        savingGoalSPM = savingGoalGoal.minus(savingGoalBalance);
+                    }
+
+                    savingGoal.setBalance(savingGoalBalance.plus(savingGoalSPM));
+                    balance = balance.minus(savingGoalSPM);
+                }
+            }
+        }
+        return balance;
     }
 
     private int getAmountOfMonthsBetweenDates(DateTime startDate, DateTime endDate) {
@@ -237,6 +252,8 @@ public class SavingGoalController {
                                  HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
         String query = "DELETE FROM saving_goals WHERE saving_goal_id = ? AND session_id = ?";
+
+
         DBUtil.executeDelete(response, query, id, sessionID);
     }
 }

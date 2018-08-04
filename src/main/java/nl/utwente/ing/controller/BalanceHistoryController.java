@@ -3,7 +3,9 @@ package nl.utwente.ing.controller;
 
 import com.google.gson.JsonParseException;
 import nl.utwente.ing.controller.database.DBConnection;
+import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.BalanceHistory;
+import nl.utwente.ing.model.SavingGoal;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
 import org.apache.commons.dbutils.DbUtils;
@@ -41,34 +43,57 @@ public class BalanceHistoryController {
             return null;
         }
 
+        List<Transaction> transactions = new ArrayList<>();
+        List<SavingGoal> savingGoals = new ArrayList<>();
+
         String transactionsQuery = "SELECT transaction_id AS id, amount, date, external_iban, type, description FROM " +
                 "transactions WHERE session_id = ? ORDER BY datetime(date);";
+        String savingGoalsQuery = "SELECT goal, save_per_month AS spm, minimum_balance_required AS mbr FROM " +
+                "saving_goals WHERE session_id = ? ORDER BY datetime(creation_date_time);";
         Connection connection = null;
-        PreparedStatement preparedStatement = null;
-        ResultSet resultSet = null;
-        List<Transaction> transactions = new ArrayList<>();
+        PreparedStatement transactionsPreparedStatement = null;
+        PreparedStatement savingGoalsPreparedStatement = null;
+        ResultSet transactionsResultSet = null;
+        ResultSet savingGoalsResultSet = null;
         try {
             connection = DBConnection.instance.getConnection();
-            preparedStatement = connection.prepareStatement(transactionsQuery);
-            preparedStatement.setString(1, sessionID);
+            transactionsPreparedStatement = connection.prepareStatement(transactionsQuery);
+            transactionsPreparedStatement.setString(1, sessionID);
 
-            resultSet = preparedStatement.executeQuery();
+            transactionsResultSet = transactionsPreparedStatement.executeQuery();
 
-            while (resultSet.next()) {
-                transactions.add(new Transaction(resultSet.getInt("id"), resultSet.getString("date"),
-                        Money.ofMinor(CurrencyUnit.EUR, resultSet
-                        .getLong("amount")), resultSet.getString("external_iban"), Type.valueOf(resultSet.getString
+            while (transactionsResultSet.next()) {
+                transactions.add(new Transaction(transactionsResultSet.getInt("id"), transactionsResultSet.getString("date"),
+                        Money.ofMinor(CurrencyUnit.EUR, transactionsResultSet
+                        .getLong("amount")), transactionsResultSet.getString("external_iban"), Type.valueOf(transactionsResultSet.getString
                         ("type")), null, null));
             }
+
+            savingGoalsPreparedStatement = connection.prepareStatement(savingGoalsQuery);
+            savingGoalsPreparedStatement.setString(1, sessionID);
+
+            savingGoalsResultSet = savingGoalsPreparedStatement.executeQuery();
+
+            while (savingGoalsResultSet.next()) {
+                savingGoals.add(new SavingGoal(null, null,
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalsResultSet.getLong("goal")),
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalsResultSet.getLong("spm")),
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalsResultSet.getLong("mbr")),
+                        Money.parse("EUR 0.00")));
+            }
+
         } catch (SQLException e) {
             e.printStackTrace();
             response.setStatus(500);
             return null;
         } finally {
-            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(savingGoalsResultSet);
+            DbUtils.closeQuietly(savingGoalsPreparedStatement);
+            DbUtils.closeQuietly(connection, transactionsPreparedStatement, transactionsResultSet);
         }
 
-        return getBalanceHistories(parseTransactions(transactions, timeIntervals), timeIntervals);
+        return getBalanceHistories(parseTransactions(transactions, timeIntervals), timeIntervals, savingGoals);
     }
 
     private static List<DateTime> parseTimeIntervals(String interval, int intervals) throws JsonParseException {
@@ -125,31 +150,53 @@ public class BalanceHistoryController {
         return transactionsInTimeIntervals;
     }
 
-    private static List<BalanceHistory> getBalanceHistories(List<List<Transaction>> transactionList, List<DateTime>
-            dateIntervals) {
+    private static List<BalanceHistory> getBalanceHistories(List<List<Transaction>> transactions, List<DateTime>
+            dateIntervals, List<SavingGoal> savingGoals) {
+        SavingGoalController savingGoalController = new SavingGoalController();
+        DateTime systemTime = null;
 
         Money balance = Money.parse("EUR 0.00");
 
-        for (Transaction transaction : transactionList.get(0)) {
+        for (int i = 0; i < transactions.get(0).size(); i++) {
+            Transaction transaction = transactions.get(0).get(i);
+            DateTime transactionTime = DateTime.parse(transaction.getDate());
             if (transaction.getType().equals(Type.deposit)) {
                 balance = balance.plus(transaction.getAmount());
             } else {
                 balance = balance.minus(transaction.getAmount());
             }
+
+            if (i != 0) {
+                balance = savingGoalController.calculateNewBalances(savingGoals, balance, systemTime,
+                        transactionTime);
+            }
+            systemTime = DateTime.parse(transaction.getDate());
         }
 
-        transactionList.remove(0);
-        List<BalanceHistory> balanceHistoryList = new ArrayList<>();
+        transactions.remove(0);
+        List<BalanceHistory> balanceHistories = new ArrayList<>();
 
-        for (int i = 0; i < transactionList.size(); i++) {
-            List<Transaction> currentTransactions = transactionList.get(i);
+        for (int i = 0; i < transactions.size(); i++) {
+            List<Transaction> currentTransactions = transactions.get(i);
 
             Money open = balance.abs();
             Money low = balance.abs();
             Money high = balance.abs();
             Money volume = Money.parse("EUR 0.00");
 
-            for (Transaction transaction : currentTransactions) {
+            for (int j = 0; j < currentTransactions.size(); j++) {
+                Transaction transaction = currentTransactions.get(j);
+
+                DateTime transactionTime = DateTime.parse(transaction.getDate());
+                balance = savingGoalController.calculateNewBalances(savingGoals, balance, systemTime,
+                        transactionTime);
+
+                if (j == 0) {
+                    open = balance.abs();
+                    low = balance.abs();
+                    high = balance.abs();
+                }
+
                 Money amount = transaction.getAmount();
                 if (transaction.getType().equals(Type.deposit)) {
                     balance = balance.plus(amount);
@@ -163,12 +210,13 @@ public class BalanceHistoryController {
                     }
                 }
                 volume = volume.plus(amount);
+                systemTime = transactionTime;
             }
 
             Money close = balance.abs();
 
-            balanceHistoryList.add(new BalanceHistory(open, close, high, low, volume, dateIntervals.get(i)));
+            balanceHistories.add(new BalanceHistory(open, close, high, low, volume, dateIntervals.get(i)));
         }
-        return balanceHistoryList;
+        return balanceHistories;
     }
 }
