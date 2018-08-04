@@ -59,19 +59,23 @@ public class SavingGoal {
     }
 
     public BigDecimal getGoal() {
-        return goal.getAmount();
+        return goal.getAmountMajor();
     }
 
     public BigDecimal getSavePerMonth() {
-        return savePerMonth.getAmount();
+        return savePerMonth.getAmountMajor();
     }
 
     public BigDecimal getMinimumBalanceRequired() {
-        return minimumBalanceRequired.getAmount();
+        return minimumBalanceRequired.getAmountMajor();
+    }
+
+    public void setBalance(Money balance) {
+        this.balance = balance;
     }
 
     public BigDecimal getBalance() {
-        return balance.getAmount();
+        return balance.getAmountMajor();
     }
 
     public boolean containsNullElements() {
