@@ -65,6 +65,12 @@
 			<artifactId>joda-time</artifactId>
 			<version>2.10</version>
 		</dependency>
+
+		<dependency>
+			<groupId>org.joda</groupId>
+			<artifactId>joda-money</artifactId>
+			<version>0.12</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<plugins>

@@ -31,6 +31,8 @@ import nl.utwente.ing.model.Category;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
 import org.apache.commons.dbutils.DbUtils;
+import org.joda.money.CurrencyUnit;
+import org.joda.money.Money;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
@@ -100,7 +102,7 @@ public class TransactionController {
 
                 transactions.add(new Transaction(resultSet.getInt("transaction_id"),
                         resultSet.getString("date"),
-                        resultSet.getLong("amount"),
+                        Money.ofMinor(CurrencyUnit.EUR, resultSet.getLong("amount")),
                         resultSet.getString("external_iban"),
                         Type.valueOf(resultSet.getString("type")),
                         resultCategory,
@@ -109,7 +111,6 @@ public class TransactionController {
             }
 
             response.setStatus(200);
-
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
             return gsonBuilder.create().toJson(transactions);
@@ -167,7 +168,7 @@ public class TransactionController {
                     categoryRulesPreparedStatement = connection.prepareStatement(categoryRuleQuery);
 
                     preparedStatement.setString(1, transaction.getDate());
-                    preparedStatement.setDouble(2, transaction.getAmount());
+                    preparedStatement.setLong(2, transaction.getAmount().getAmountMinorLong());
                     preparedStatement.setString(3, transaction.getExternalIBAN());
                     if (transaction.getCategory() != null) {
                         preparedStatement.setInt(4, transaction.getCategory().getId());
@@ -272,7 +273,7 @@ public class TransactionController {
 
                 Transaction transaction = new Transaction(resultSet.getInt("transaction_id"),
                         resultSet.getString("date"),
-                        resultSet.getLong("amount"),
+                        Money.ofMinor(CurrencyUnit.EUR, resultSet.getLong("amount")),
                         resultSet.getString("external_iban"),
                         Type.valueOf(resultSet.getString("type")),
                         category,
@@ -332,7 +333,7 @@ public class TransactionController {
                     preparedStatement = connection.prepareStatement(query);
 
                     preparedStatement.setString(1, transaction.getDate());
-                    preparedStatement.setLong(2, transaction.getAmount());
+                    preparedStatement.setLong(2, transaction.getAmount().getAmountMinorLong());
                     preparedStatement.setString(3, transaction.getExternalIBAN());
                     preparedStatement.setString(4, transaction.getType().toString().toLowerCase());
                     preparedStatement.setString(5, transaction.getDate());
@@ -452,7 +453,7 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
         }
 
         String date = jsonObject.get("date").getAsString();
-        Long amount = Long.valueOf(jsonObject.get("amount").getAsString().replace(".", ""));
+        Money amount = Money.of(CurrencyUnit.EUR, jsonObject.get("amount").getAsBigDecimal());
         String externalIBAN = jsonObject.get("externalIBAN").getAsString();
         Type transactionType = Type.valueOf(jsonObject.get("type").getAsString());
         Category category = null;
@@ -473,7 +474,7 @@ class TransactionAdapter implements JsonDeserializer<Transaction>, JsonSerialize
 
         object.addProperty("id", transaction.getId());
         object.addProperty("date", transaction.getDate());
-        object.addProperty("amount", transaction.getAmount() / 100.0);
+        object.addProperty("amount", transaction.getAmount().getAmount());
         object.addProperty("externalIBAN", transaction.getExternalIBAN());
         object.addProperty("type", transaction.getType().toString());
 

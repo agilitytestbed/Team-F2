@@ -24,11 +24,13 @@
  */
 package nl.utwente.ing.model;
 
+import org.joda.money.Money;
+
 public class Transaction {
 
     private Integer id;
     private String date;
-    private Long amount;
+    private Money amount;
     private String externalIBAN;
     private Type type;
     private Category category;
@@ -42,7 +44,8 @@ public class Transaction {
      * @param type type of transaction
      * @param category transaction category
      */
-    public Transaction(Integer id, String date, Long amount, String externalIBAN, Type type, Category category, String description) {
+    public Transaction(Integer id, String date, Money amount, String externalIBAN, Type type, Category category,
+                       String description) {
         this.id = id;
         this.date = date;
         this.amount = amount;
@@ -60,7 +63,7 @@ public class Transaction {
         return date;
     }
 
-    public Long getAmount() {
+    public Money getAmount() {
         return amount;
     }
 
