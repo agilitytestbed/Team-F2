@@ -27,9 +27,12 @@ import com.google.gson.*;
 import nl.utwente.ing.controller.database.DBConnection;
 import nl.utwente.ing.controller.database.DBUtil;
 import nl.utwente.ing.model.SavingGoal;
+import nl.utwente.ing.model.Transaction;
+import nl.utwente.ing.model.Type;
 import org.apache.commons.dbutils.DbUtils;
 import org.joda.money.CurrencyUnit;
 import org.joda.money.Money;
+import org.joda.time.DateTime;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
@@ -51,11 +54,123 @@ public class SavingGoalController {
                                               HttpServletResponse response) {
         String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
 
-        List<SavingGoal> savingGoalList = new ArrayList<>();
+        List<SavingGoal> savingGoals = new ArrayList<>();
+        List<Transaction> transactions = new ArrayList<>();
 
+        String savingGoalQuery = "SELECT saving_goal_id AS id, name, goal, save_per_month AS spm, minimum_balance_required AS " +
+                "mbr FROM saving_goals WHERE session_id = ? ORDER BY datetime(creation_date_time) ASC;";
+        String transactionQuery = "SELECT amount, date, type FROM transactions WHERE session_id = ? ORDER BY datetime" +
+                "(date) ASC;";
+        Connection connection = null;
+        PreparedStatement savingGoalPreparedStatement = null;
+        PreparedStatement transactionPreparedStatement = null;
+        ResultSet savingGoalResultSet = null;
+        ResultSet transactionResultSet = null;
+        try {
+            connection = DBConnection.instance.getConnection();
+            savingGoalPreparedStatement = connection.prepareStatement(savingGoalQuery);
+            savingGoalPreparedStatement.setString(1, sessionID);
+            savingGoalResultSet = savingGoalPreparedStatement.executeQuery();
 
+            while (savingGoalResultSet.next()) {
+                SavingGoal savingGoal = new SavingGoal(
+                        savingGoalResultSet.getInt("id"),
+                        savingGoalResultSet.getString("name"),
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalResultSet.getLong("goal")),
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalResultSet.getLong("spm")),
+                        Money.ofMinor(CurrencyUnit.EUR, savingGoalResultSet.getLong("mbr")),
+                        Money.parse("EUR 0.00"));
+                savingGoals.add(savingGoal);
+            }
 
-        return savingGoalList;
+            transactionPreparedStatement = connection.prepareStatement(transactionQuery);
+            transactionPreparedStatement.setString(1, sessionID);
+            transactionResultSet = transactionPreparedStatement.executeQuery();
+
+            while (transactionResultSet.next()) {
+                Transaction transaction = new Transaction(
+                        null,
+                        transactionResultSet.getString("date"),
+                        Money.ofMinor(CurrencyUnit.EUR, transactionResultSet.getLong("amount")),
+                        null,
+                        Type.valueOf(transactionResultSet.getString("type")),
+                        null,
+                        null);
+                transactions.add(transaction);
+            }
+            response.setStatus(200);
+            return calculateSavingGoalBalances(savingGoals, transactions);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            return null;
+        } finally {
+            DBUtil.executeCommit(connection);
+            DbUtils.closeQuietly(transactionResultSet);
+            DbUtils.closeQuietly(transactionPreparedStatement);
+            DbUtils.closeQuietly(connection, savingGoalPreparedStatement, savingGoalResultSet);
+        }
+    }
+
+    private List<SavingGoal> calculateSavingGoalBalances(List<SavingGoal> savingGoals, List<Transaction> transactions) {
+        DateTime systemTime;
+        Money balance;
+
+        if (!transactions.isEmpty()) {
+            Transaction firstTransaction = transactions.get(0);
+            transactions.remove(0);
+            systemTime = DateTime.parse(firstTransaction.getDate());
+            balance = firstTransaction.getType() == Type.deposit ? firstTransaction.getAmount() :
+                    Money.of(CurrencyUnit.EUR, firstTransaction.getAmount().getAmount().negate());
+            for (Transaction transaction : transactions) {
+                DateTime transactionTime = DateTime.parse(transaction.getDate());
+
+                if (transaction.getType().equals(Type.deposit)) {
+                    balance = balance.plus(transaction.getAmount());
+                } else {
+                    balance = balance.minus(transaction.getAmount());
+                }
+
+                balance = calculateNewBalances(savingGoals, balance, systemTime, transactionTime);
+                systemTime = DateTime.parse(transaction.getDate());
+            }
+        }
+        return savingGoals;
+    }
+
+    Money calculateNewBalances(List<SavingGoal> savingGoals, Money balance, DateTime systemTime,
+                               DateTime transactionTime) {
+        int applicationTimes = getAmountOfMonthsBetweenDates(systemTime, transactionTime);
+        for (int i = 0; i < applicationTimes; i++) {
+            for (SavingGoal savingGoal : savingGoals) {
+                Money savingGoalBalance = Money.of(CurrencyUnit.EUR, savingGoal.getBalance());
+                Money savingGoalMBR = Money.of(CurrencyUnit.EUR, savingGoal.getMinimumBalanceRequired());
+                Money savingGoalGoal = Money.of(CurrencyUnit.EUR, savingGoal.getGoal());
+                Money savingGoalSPM = Money.of(CurrencyUnit.EUR, savingGoal.getSavePerMonth());
+
+                if (savingGoalMBR.isLessThan(balance) && savingGoalBalance.isLessThan(savingGoalGoal)) {
+                    if (savingGoalGoal.isLessThan(savingGoalBalance.plus(savingGoalSPM))) {
+                        savingGoalSPM = savingGoalGoal.minus(savingGoalBalance);
+                    }
+
+                    savingGoal.setBalance(savingGoalBalance.plus(savingGoalSPM));
+                    balance = balance.minus(savingGoalSPM);
+                }
+            }
+        }
+        return balance;
+    }
+
+    private int getAmountOfMonthsBetweenDates(DateTime startDate, DateTime endDate) {
+        int amount = 0;
+        startDate = startDate.withTimeAtStartOfDay().withDayOfMonth(1).plusMonths(1);
+
+        while (startDate.isBefore(endDate)) {
+            amount += 1;
+            startDate = startDate.plusMonths(1);
+        }
+
+        return amount;
     }
 
     @RequestMapping(value = "", method = RequestMethod.POST)
@@ -78,7 +193,7 @@ public class SavingGoalController {
             }
 
             String insertQuery = "INSERT INTO saving_goals (name, goal, save_per_month, minimum_balance_required, " +
-                    "balance, session_id) VALUES (?, ?, ?, ?, ?, ?);";
+                    "session_id) VALUES (?, ?, ?, ?, ?);";
             String idQuery = "SELECT last_insert_rowid()";
 
             Connection connection = null;
@@ -94,8 +209,7 @@ public class SavingGoalController {
                 preparedStatement.setLong(2, Money.of(CurrencyUnit.EUR, savingGoal.getGoal()).getAmountMinorLong());
                 preparedStatement.setLong(3, Money.of(CurrencyUnit.EUR, savingGoal.getSavePerMonth()).getAmountMinorLong());
                 preparedStatement.setLong(4, Money.of(CurrencyUnit.EUR, savingGoal.getMinimumBalanceRequired()).getAmountMinorLong());
-                preparedStatement.setLong(5, Money.of(CurrencyUnit.EUR, savingGoal.getBalance()).getAmountMinorLong());
-                preparedStatement.setString(6, sessionID);
+                preparedStatement.setString(5, sessionID);
 
                 if (preparedStatement.executeUpdate() != 1) {
                     response.setStatus(405);
@@ -138,6 +252,8 @@ public class SavingGoalController {
                                  HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
         String query = "DELETE FROM saving_goals WHERE saving_goal_id = ? AND session_id = ?";
+
+
         DBUtil.executeDelete(response, query, id, sessionID);
     }
 }
@@ -150,9 +266,9 @@ class SavingGoalAdapter implements JsonDeserializer<SavingGoal> {
         try {
             JsonObject jsonObject = json.getAsJsonObject();
             String name = jsonObject.get("name").getAsString();
-            Money goal = Money.ofMinor(CurrencyUnit.EUR, jsonObject.get("goal").getAsLong());
-            Money savePerMonth = Money.ofMinor(CurrencyUnit.EUR, jsonObject.get("savePerMonth").getAsLong());
-            Money minimumBalanceRequired = Money.ofMinor(CurrencyUnit.EUR,
+            Money goal = Money.ofMajor(CurrencyUnit.EUR, jsonObject.get("goal").getAsLong());
+            Money savePerMonth = Money.ofMajor(CurrencyUnit.EUR, jsonObject.get("savePerMonth").getAsLong());
+            Money minimumBalanceRequired = Money.ofMajor(CurrencyUnit.EUR,
                     jsonObject.get("minBalanceRequired").getAsLong());
             return new SavingGoal(null, name, goal, savePerMonth, minimumBalanceRequired, Money.parse("EUR 0.00"));
         } catch (NullPointerException | NumberFormatException e) {
