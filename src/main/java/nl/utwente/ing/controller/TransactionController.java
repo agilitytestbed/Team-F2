@@ -60,15 +60,13 @@ public class TransactionController {
                                      HttpServletResponse response) {
 
         String sessionID = headerSessionID != null ? headerSessionID : paramSessionID;
-        String transactionsQuery = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, t.description, " +
-                "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
-                "CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
-                "FROM (transactions t LEFT JOIN categories c ON 1=1) " +
-                "WHERE t.session_id = ? " +
-                "AND c.session_id = t.session_id " +
-                "AND (t.category_id IS NULL OR c.category_id = t.category_id)";
+        String transactionsQuery = "SELECT transaction_id, date, amount, external_iban, type, description, " +
+                "transactions.category_id, name\n" +
+                "FROM transactions\n" +
+                "INNER JOIN categories ON categories.category_id = transactions.category_id WHERE " +
+                "transactions.session_id = ?";
         if (category != null) {
-            transactionsQuery += "AND c.name = ?";
+            transactionsQuery += "AND categories.name = ?";
         }
         transactionsQuery += "LIMIT ? OFFSET ?;";
 
@@ -97,7 +95,7 @@ public class TransactionController {
                 Category resultCategory = null;
                 int categoryId = resultSet.getInt("category_id");
                 if (!resultSet.wasNull()) {
-                    resultCategory = new Category(categoryId, resultSet.getString("category_name"));
+                    resultCategory = new Category(categoryId, resultSet.getString("name"));
                 }
 
                 transactions.add(new Transaction(resultSet.getInt("transaction_id"),
@@ -128,6 +126,7 @@ public class TransactionController {
      * Creates a new transaction that is linked to the current sessions id.
      * @param response to edit the status code of the response
      */
+    @SuppressWarnings("Duplicates")
     @RequestMapping(value = "", method = RequestMethod.POST, produces = "application/json")
     public String createTransaction(@RequestHeader(value = "X-session-id", required = false) String headerSessionID,
                                     @RequestParam(value = "session_id", required = false) String paramSessionID,
@@ -242,13 +241,10 @@ public class TransactionController {
                                  HttpServletResponse response) {
         String sessionID = headerSessionID == null ? querySessionID : headerSessionID;
 
-        String query = "SELECT DISTINCT t.transaction_id, t.date, t.amount, t.external_iban, t.type, t.description, " +
-                "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.category_id END AS category_id, " +
-                "    CASE WHEN t.category_id IS NULL THEN NULL ELSE c.name END AS category_name " +
-                "FROM transactions t, categories c " +
-                "WHERE t.session_id = ? " +
-                "AND t.transaction_id = ? " +
-                "AND (t.category_id IS NULL OR c.category_id = t.category_id);";
+        String query = "SELECT DISTINCT transaction_id, date, amount, external_iban, type, description, transactions.category_id, name\n" +
+                "FROM transactions\n" +
+                "INNER JOIN categories on transactions.category_id = categories.category_id\n" +
+                "WHERE transactions.session_id = ? AND transactions.transaction_id = ?;";
         Connection connection = null;
         PreparedStatement preparedStatement = null;
         ResultSet resultSet = null;
@@ -268,7 +264,7 @@ public class TransactionController {
                 Category category = null;
                 int categoryId = resultSet.getInt("category_id");
                 if (!resultSet.wasNull()) {
-                    category = new Category(categoryId, resultSet.getString("category_name"));
+                    category = new Category(categoryId, resultSet.getString("name"));
                 }
 
                 Transaction transaction = new Transaction(resultSet.getInt("transaction_id"),
