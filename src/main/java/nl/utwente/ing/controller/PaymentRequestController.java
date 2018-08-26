@@ -26,8 +26,8 @@ package nl.utwente.ing.controller;
 import com.google.gson.*;
 import nl.utwente.ing.controller.database.DBConnection;
 import nl.utwente.ing.controller.database.DBUtil;
+import nl.utwente.ing.model.Category;
 import nl.utwente.ing.model.PaymentRequest;
-import nl.utwente.ing.model.SavingGoal;
 import nl.utwente.ing.model.Transaction;
 import nl.utwente.ing.model.Type;
 import org.apache.commons.dbutils.DbUtils;
@@ -44,7 +44,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 @RestController
@@ -55,39 +54,20 @@ public class PaymentRequestController {
                                         @RequestParam(value = "session_id", required = false) String paramSessionID,
                                         HttpServletResponse response) {
         String sessionID = headerSessionID == null ? paramSessionID : headerSessionID;
-        GsonBuilder transactionGsonBuilder = new GsonBuilder();
-        transactionGsonBuilder.registerTypeAdapter(Transaction.class, new TransactionAdapter());
-        List<Transaction> transactionList = Arrays.asList(
-                transactionGsonBuilder.create().fromJson(new TransactionController().getAllTransactions(headerSessionID,
-                paramSessionID, 0, 0, null, response), Transaction[].class));
+        List<Transaction> transactionList = getAllTransactions(sessionID);
 
         List<PaymentRequest> paymentRequests = new ArrayList<>();
 
         String query  = "SELECT payment_request_id AS id, description, due_date, amount, number_of_requests FROM " +
                 "payment_requests WHERE session_id = ? ORDER BY datetime(creation_date) ASC;";
-        String transactionQuery = "SELECT t.transaction_id, t.date, t.amount, t.external_iban, t.type, t.description\n" +
-                "FROM transactions t\n" +
-                "    NATURAL LEFT OUTER JOIN categories\n" +
-                "WHERE t.session_id = ?;";
 
         Connection connection = null;
-        PreparedStatement transactionPreparedStatement = null;
         PreparedStatement preparedStatement = null;
-        ResultSet transactionResultSet = null;
         ResultSet resultSet = null;
 
         try {
             connection = DBConnection.instance.getConnection();
             preparedStatement = connection.prepareStatement(query);
-            transactionPreparedStatement = connection.prepareStatement(transactionQuery);
-            transactionPreparedStatement.setString(1, sessionID);
-
-            transactionResultSet = transactionPreparedStatement.executeQuery();
-
-            while (transactionResultSet.next()) {
-                System.out.println("yes");
-            }
-
             preparedStatement.setString(1, sessionID);
 
             resultSet = preparedStatement.executeQuery();
@@ -115,13 +95,50 @@ public class PaymentRequestController {
         return gsonBuilder.create().toJson(parseTransactions(paymentRequests, transactionList));
     }
 
+    private List<Transaction> getAllTransactions(String sessionID) {
+        String query = "SELECT transaction_id, date, amount, external_iban, type, description, transactions.category_id, name\n" +
+                "FROM transactions LEFT JOIN categories on transactions.category_id = categories.category_id WHERE transactions.session_id = ?;";
+
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+
+        List<Transaction> transactions = new ArrayList<>();
+
+        try {
+            connection = DBConnection.instance.getConnection();
+            preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setString(1, sessionID);
+
+            resultSet = preparedStatement.executeQuery();
+
+            while (resultSet.next()) {
+                Category category = null;
+                resultSet.getInt("category_id");
+                if (!resultSet.wasNull()) {
+                    category = new Category(resultSet.getInt("category_id"), resultSet.getString("name"));
+                }
+                transactions.add(new Transaction(resultSet.getInt("transaction_id"), resultSet.getString("date"),
+                        Money.ofMinor(CurrencyUnit.EUR, resultSet.getLong("amount")), resultSet.getString(
+                                "external_iban"), Type.valueOf(resultSet.getString("type")), category,
+                        resultSet.getString("description")));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            DbUtils.closeQuietly(connection, preparedStatement, resultSet);
+        }
+        return transactions;
+    }
+
     private List<PaymentRequest> parseTransactions(List<PaymentRequest> paymentRequests,
                                                    List<Transaction> transactions) {
         for (Transaction transaction : transactions) {
             if (transaction.getType().equals(Type.deposit)) {
                 for (PaymentRequest paymentRequest : paymentRequests) {
                     if (!paymentRequest.getFilled() &&
-                            paymentRequest.getDueDate().isBefore(DateTime.parse(transaction.getDate())) &&
+                            paymentRequest.getDueDate().isAfter(DateTime.parse(transaction.getDate())) &&
                             paymentRequest.getAmount().isEqual(transaction.getAmount())) {
                         paymentRequest.addTransaction(transaction);
                         if (paymentRequest.getTransactions().size() == paymentRequest.getNumberOfRequests()) {
