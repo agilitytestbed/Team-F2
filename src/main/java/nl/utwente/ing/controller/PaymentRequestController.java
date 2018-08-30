@@ -87,6 +87,7 @@ public class PaymentRequestController {
             response.setStatus(500);
             return null;
         } finally {
+            DBUtil.executeCommit(connection);
             DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
         GsonBuilder gsonBuilder = new GsonBuilder();
@@ -127,6 +128,7 @@ public class PaymentRequestController {
             e.printStackTrace();
             return null;
         } finally {
+            DBUtil.executeCommit(connection);
             DbUtils.closeQuietly(connection, preparedStatement, resultSet);
         }
         return transactions;
